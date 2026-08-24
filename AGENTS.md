@@ -117,3 +117,10 @@ What that does **not** cover, and should not be claimed: **SimpleCue has never b
 live show.** No MIDI, lighting or streaming hardware has ever been connected to it, and only
 the macOS/CoreAudio build has been exercised against real audio hardware. Phase 3 streaming
 adapters are unstarted.
+
+## Notes
+
+`docs/NOTES.md` carries this repo's working notes — current status, decisions
+already made, and the traps that have actually bitten. Read it before changing
+anything non-obvious. Cross-cutting fleet knowledge lives in
+[fleet-notes](https://github.com/stoatworks-labs/fleet-notes).
