@@ -47,6 +47,7 @@ EXPORTS=$EXPORTS,_wc_output_ptr,_wc_spec_ptr,_wc_spec_size,_wc_block_size
 EXPORTS=$EXPORTS,_wc_max_voices,_wc_num_outputs,_malloc,_free
 
 WORKLET="webcue/packages/engine/worklet/webcue-processor.js"
+APP_ENGINE="webcue/packages/app/src/engine"
 
 build_engine() {
   echo "==> engine -> $WEB/webcue-engine.wasm"
@@ -57,10 +58,16 @@ build_engine() {
     -o "$WEB/webcue-engine.wasm"
   ls -la "$WEB/webcue-engine.wasm"
 
-  # The worklet has ONE copy, in packages/engine. The demo gets a build-time
-  # copy rather than its own edition, because two hand-maintained versions of a
-  # real-time file is how they drift.
+  # The worklet has ONE copy, in packages/engine. Consumers get a build-time
+  # copy rather than their own edition, because two hand-maintained versions of
+  # a real-time file is how they drift.
   cp "$WORKLET" "$WEB/webcue-processor.js"
+
+  # The app imports both with ?url, so Vite emits them as assets instead of
+  # trying to bundle a worklet that is loaded by addModule at runtime.
+  mkdir -p "$APP_ENGINE"
+  cp "$WORKLET" "$APP_ENGINE/webcue-processor.js"
+  cp "$WEB/webcue-engine.wasm" "$APP_ENGINE/webcue-engine.wasm"
 }
 
 build_verify() {

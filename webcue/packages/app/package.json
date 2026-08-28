@@ -1,0 +1,25 @@
+{
+  "//": "The UI. Source/GUI is 4,753 lines of JUCE that does not port, so this is a rebuild rather than a translation — but it rebuilds the same interaction, because a browser build that quietly behaves differently would misrepresent the app it is named after.",
+  "name": "@webcue/app",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@webcue/core": "*",
+    "@webcue/engine": "*",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "vite": "^7.1.12"
+  }
+}

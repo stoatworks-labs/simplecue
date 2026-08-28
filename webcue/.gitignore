@@ -4,3 +4,5 @@ node_modules/
 
 # Copied from packages/engine by build.sh. The worklet has one source of truth.
 web/webcue-processor.js
+packages/app/src/engine/
+packages/app/dist/

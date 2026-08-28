@@ -459,6 +459,15 @@ export class Sequencer {
     this.changed();
   }
 
+  /** Releases one voice rather than every voice of its cue. The running-cue
+      panel needs this: it lists voices, and a cue firing twice shows twice. */
+  releaseVampVoice(ref: VoiceRef): void {
+    if (this.pool.get(ref) === undefined) return;
+
+    this.host.releaseVamp(ref);
+    this.changed();
+  }
+
   releaseAllVamps(): void {
     for (const record of this.pool.all()) {
       if (this.host.voiceIsVamping(record.ref)) this.host.releaseVamp(record.ref);
