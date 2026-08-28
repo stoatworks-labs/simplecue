@@ -214,6 +214,43 @@ export class Sequencer {
     return fired;
   }
 
+  /** Plays a cue without touching the cue list, for auditioning from the
+      inspector. AudioEngine.cpp:283-317: the pre-wait is dropped and the link
+      is stripped, so listening to a cue never fires the rest of the show. */
+  audition(cue: Cue, fromSeconds: number): boolean {
+    this.errors = [];
+
+    const ctx: BuildSpecContext = {
+      sampleRate: this.host.sampleRate,
+      numOutputChannels: this.host.numOutputChannels,
+      sources: this.sources,
+    };
+
+    const built = buildVoiceSpec({ ...cue, preWait: 0 }, ctx, 0, Math.max(0, fromSeconds));
+
+    if (!built.ok) {
+      this.setError(built.error);
+      return false;
+    }
+
+    const record = this.pool.allocate({
+      cueId: cue.id,
+      cueIndex: -1,
+      parent: null,
+      sourceIndex: built.spec.sourceIndex,
+      linksOnward: false,
+    });
+
+    if (record === null) {
+      this.setError(`All ${this.pool.capacity} voices are in use.`);
+      return false;
+    }
+
+    this.host.startVoice(record.ref, built.spec);
+    this.changed();
+    return true;
+  }
+
   private advance(): void {
     this.standbyPos = advanceStandby(this.cues, this.standbyPos);
     this.changed();

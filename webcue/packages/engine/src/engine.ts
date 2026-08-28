@@ -37,6 +37,23 @@ export interface EngineOptions {
   context?: AudioContext;
 }
 
+/** Min/max pairs for drawing a waveform, replacing juce::AudioThumbnail.
+
+    Computed once at load, because the decoded audio is transferred to the
+    worklet and the main thread does not keep a copy — holding one would double
+    the memory of a show that is already the largest thing in the tab. */
+export interface SourcePeaks {
+  samplesPerPeak: number;
+  numFrames: number;
+  sampleRate: number;
+  /** Interleaved min, max per bucket, mixed down across channels. */
+  data: Float32Array;
+}
+
+/** Matches juce::AudioThumbnail's default resolution, so a webcue waveform has
+    the same detail as the desktop's at the same width. */
+const SAMPLES_PER_PEAK = 512;
+
 export interface EngineEvents {
   /** A voice finished. This is what fires an open-ended auto-follow, so it must
       reach the sequencer promptly — which is why it is a message and not a
@@ -52,6 +69,7 @@ export class WebCueEngine implements VoiceHost, SourceRegistry {
   private node: AudioWorkletNode | null = null;
   private readonly snapshot = new Map<number, SnapshotVoice>();
   private readonly sources = new Map<string, SourceInfo>();
+  private readonly peaks = new Map<string, SourcePeaks>();
   private nextSourceIndex = 0;
   private events: EngineEvents = {};
 
@@ -225,6 +243,9 @@ export class WebCueEngine implements VoiceHost, SourceRegistry {
       channels.push(new Float32Array(buffer.getChannelData(c)));
     }
 
+    // Before the transfer, because after it these arrays are detached.
+    this.peaks.set(audioFile, computePeaks(channels, buffer.length, buffer.sampleRate));
+
     const info: SourceInfo = {
       index: this.nextSourceIndex++,
       numFrames: buffer.length,
@@ -248,6 +269,10 @@ export class WebCueEngine implements VoiceHost, SourceRegistry {
 
   hasSource(audioFile: string): boolean {
     return this.sources.has(audioFile);
+  }
+
+  getPeaks(audioFile: string): SourcePeaks | null {
+    return this.peaks.get(audioFile) ?? null;
   }
 
   //== Internals ============================================================
@@ -287,4 +312,41 @@ export class WebCueEngine implements VoiceHost, SourceRegistry {
         break;
     }
   }
+}
+
+/** Reduces decoded audio to min/max pairs for drawing.
+
+    Runs on the main thread. That is a deliberate simplification rather than an
+    oversight: it is a single linear pass at load time, not during a show, and
+    at 48 kHz stereo it costs a few milliseconds per minute of audio. If very
+    long files ever make that visible, this is the piece to move to a Worker —
+    it takes plain Float32Arrays and returns a small result, so it moves cleanly. */
+function computePeaks(
+  channels: Float32Array[],
+  numFrames: number,
+  sampleRate: number,
+): SourcePeaks {
+  const buckets = Math.max(1, Math.ceil(numFrames / SAMPLES_PER_PEAK));
+  const data = new Float32Array(buckets * 2);
+
+  for (let b = 0; b < buckets; b++) {
+    const start = b * SAMPLES_PER_PEAK;
+    const end = Math.min(numFrames, start + SAMPLES_PER_PEAK);
+
+    let min = 0;
+    let max = 0;
+
+    for (const channel of channels) {
+      for (let i = start; i < end; i++) {
+        const v = channel[i] ?? 0;
+        if (v < min) min = v;
+        if (v > max) max = v;
+      }
+    }
+
+    data[b * 2] = min;
+    data[b * 2 + 1] = max;
+  }
+
+  return { samplesPerPeak: SAMPLES_PER_PEAK, numFrames, sampleRate, data };
 }

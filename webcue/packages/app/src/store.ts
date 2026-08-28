@@ -11,6 +11,7 @@ import {
   Sequencer,
   clampStandby,
   isRoutedOffDevice,
+  makeCue,
   makeShow,
   parseShow,
   standbyForCue,
@@ -35,6 +36,9 @@ export interface AppSnapshot {
   showName: string;
   dirty: boolean;
   standby: Standby;
+  /** Which cue the inspector is editing. Separate from standby: the desktop
+      lets you edit cue 40 while cue 3 is on standby, and so does this. */
+  selectedIndex: number;
   active: ActiveCueInfo[];
   paused: boolean;
   masterGainDb: number;
@@ -60,6 +64,7 @@ export class AppStore {
       showName: 'Untitled show',
       dirty: false,
       standby: { index: -1, step: -1 },
+      selectedIndex: -1,
       active: [],
       paused: false,
       masterGainDb: 0,
@@ -270,6 +275,101 @@ export class AppStore {
   setStandby(standby: Standby): void {
     this.sequencer?.setStandby(standby);
     this.set({ standby });
+  }
+
+  setSelected(index: number): void {
+    this.set({ selectedIndex: index });
+  }
+
+  /** Edits one cue in place. Every inspector field goes through this, so the
+      dirty flag and the standby re-clamp happen in one place — turning a vamp
+      off removes its Devamp step, and standby has to come back into range. */
+  updateCue(cueId: string, patch: Partial<Cue>): void {
+    const cues = this.snapshot.show.cues.map((cue) =>
+      cue.id === cueId ? { ...cue, ...patch } : cue,
+    );
+
+    this.setCues(cues, true);
+  }
+
+  addCue(): void {
+    const show = this.snapshot.show;
+
+    // A new cue takes the show's default fades, as Show::applyDefaultsTo does.
+    const cue = makeCue({
+      number: String(show.cues.length + 1),
+      name: 'New cue',
+      fadeInTime: show.defaultFadeInTime,
+      fadeOutTime: show.defaultFadeOutTime,
+      fadeInShape: show.defaultFadeShape,
+      fadeOutShape: show.defaultFadeShape,
+    });
+
+    const at = this.snapshot.selectedIndex >= 0 ? this.snapshot.selectedIndex + 1 : show.cues.length;
+    const cues = [...show.cues.slice(0, at), cue, ...show.cues.slice(at)];
+
+    this.setCues(cues, true);
+    this.set({ selectedIndex: at });
+  }
+
+  removeCue(cueId: string): void {
+    const cues = this.snapshot.show.cues.filter((c) => c.id !== cueId);
+    const selected = Math.min(this.snapshot.selectedIndex, cues.length - 1);
+
+    this.setCues(cues, true);
+    this.set({ selectedIndex: selected });
+  }
+
+  moveCue(from: number, to: number): void {
+    const cues = [...this.snapshot.show.cues];
+    if (from < 0 || from >= cues.length || to < 0 || to >= cues.length) return;
+
+    const [moved] = cues.splice(from, 1);
+    if (!moved) return;
+    cues.splice(to, 0, moved);
+
+    this.setCues(cues, true);
+    this.set({ selectedIndex: to });
+  }
+
+  /** Listening to a cue must never fire the rest of the show, so this goes
+      through Sequencer.audition, which strips the pre-wait and the link. */
+  audition(cue: Cue, fromSeconds: number): void {
+    if (!this.sequencer?.audition(cue, fromSeconds)) {
+      for (const error of this.sequencer?.getErrors() ?? []) this.say(error);
+    }
+  }
+
+  getPeaks(audioFile: string) {
+    return this.engine?.getPeaks(audioFile) ?? null;
+  }
+
+  /** Attaches a picked file to a cue that had none, or replaces its audio. */
+  async setCueAudio(cueId: string, file: File): Promise<void> {
+    if (!this.engine) return;
+
+    const path = file.name;
+
+    try {
+      await this.engine.loadSource(path, await file.arrayBuffer());
+    } catch (e) {
+      this.say(`could not decode ${file.name}: ${(e as Error).message}`);
+      return;
+    }
+
+    const info = this.engine.get(path);
+    const peaks = this.engine.getPeaks(path);
+
+    this.updateCue(cueId, {
+      audioFile: path,
+      fileDuration: peaks ? peaks.numFrames / peaks.sampleRate : 0,
+      fileChannels: info?.numChannels ?? 2,
+      fileSampleRate: peaks?.sampleRate ?? 48000,
+      // A fresh file with no out point means "to the end", which is what 0 says.
+      endTime: 0,
+    });
+
+    this.updateMissing();
   }
 
   setMasterGainDb(db: number): void {

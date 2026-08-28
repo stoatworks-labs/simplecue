@@ -6,6 +6,7 @@ import { WebCueEngine } from '@webcue/engine';
 import { ActiveCues } from './components/ActiveCues.tsx';
 import { CueList } from './components/CueList.tsx';
 import { FoldPrompt } from './components/FoldPrompt.tsx';
+import { Inspector } from './components/Inspector.tsx';
 import { TransportBar } from './components/TransportBar.tsx';
 import { installShortcuts } from './keyboard.ts';
 import { AppStore } from './store.ts';
@@ -29,6 +30,16 @@ export function App() {
   const running = state.status === 'running';
   const anythingPlaying = state.active.length > 0;
   const anythingVamping = state.active.some((a) => a.vamping);
+
+  const selected =
+    state.selectedIndex >= 0 ? state.show.cues[state.selectedIndex] : undefined;
+
+  // The play head only shows when the cue being edited is the one running, so
+  // the marker never claims to be somewhere it is not.
+  const playhead =
+    selected !== undefined
+      ? (state.active.find((a) => a.cueId === selected.id)?.position ?? null)
+      : null;
 
   const start = useCallback(
     () =>
@@ -181,16 +192,52 @@ export function App() {
 
       <main className="body">
         <div className="list-pane">
+          <div className="list-toolbar">
+            <button type="button" disabled={!running} onClick={() => store.addCue()}>
+              Add cue
+            </button>
+            <button
+              type="button"
+              disabled={selected === undefined || state.selectedIndex <= 0}
+              onClick={() => store.moveCue(state.selectedIndex, state.selectedIndex - 1)}
+            >
+              Move up
+            </button>
+            <button
+              type="button"
+              disabled={selected === undefined || state.selectedIndex >= state.show.cues.length - 1}
+              onClick={() => store.moveCue(state.selectedIndex, state.selectedIndex + 1)}
+            >
+              Move down
+            </button>
+          </div>
+
           <CueList
             cues={state.show.cues}
             standby={state.standby}
+            selectedIndex={state.selectedIndex}
             active={state.active}
             missingAudio={state.missingAudio}
             expanded={expanded}
             onToggleExpand={onToggleExpand}
             onStandby={onStandby}
+            onSelect={(index) => store.setSelected(index)}
             onFire={(index) => store.fireCue(index)}
           />
+
+          {selected && (
+            <Inspector
+              cue={selected}
+              cues={state.show.cues}
+              peaks={store.getPeaks(selected.audioFile)}
+              playhead={playhead}
+              numOutputs={state.numOutputs}
+              onChange={(patch) => store.updateCue(selected.id, patch)}
+              onAudition={(from) => store.audition(selected, from)}
+              onPickAudio={(file) => void store.setCueAudio(selected.id, file)}
+              onDelete={() => store.removeCue(selected.id)}
+            />
+          )}
         </div>
 
         <ActiveCues active={state.active} onStopVoice={onStopVoice} onReleaseVamp={onReleaseVamp} />

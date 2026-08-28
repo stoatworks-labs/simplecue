@@ -544,3 +544,272 @@ tr.standby td:first-child {
   gap: 10px;
   margin-top: 18px;
 }
+
+/* ---- list toolbar ---------------------------------------------------- */
+
+.list-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.list-toolbar button {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+tr.cue-row.selected td {
+  outline: 1px solid rgba(110, 168, 254, 0.35);
+  outline-offset: -1px;
+}
+
+/* ---- inspector -------------------------------------------------------- */
+
+.inspector {
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.inspector-top {
+  padding: 10px 12px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.waveform {
+  display: block;
+  border-radius: 4px;
+  background: var(--panel-2);
+}
+
+.time-bar {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+.time-bar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.time-field {
+  width: 92px;
+}
+
+.inspector-scroll {
+  padding: 4px 12px 16px;
+}
+
+.inspector-section {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.inspector-section:last-of-type {
+  border-bottom: none;
+}
+
+.inspector-section h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  font-weight: 500;
+  margin: 0 0 10px;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.field-label {
+  color: var(--dim);
+  text-align: right;
+}
+
+.field-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.field-hint {
+  grid-column: 2;
+  font-size: 11px;
+}
+
+.inspector input[type='text'],
+.inspector textarea,
+.inspector select {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 5px 7px;
+  font-size: 12px;
+  font-family: inherit;
+  min-width: 0;
+  flex: 1;
+}
+
+.inspector textarea {
+  resize: vertical;
+}
+
+.inspector input[type='text']:focus,
+.inspector textarea:focus,
+.inspector select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.inspector input:disabled,
+.inspector select:disabled {
+  opacity: 0.4;
+}
+
+.slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.slider-wrap input[type='range'] {
+  flex: 1;
+  accent-color: var(--accent);
+  min-width: 80px;
+}
+
+.slider-wrap input[type='range']:disabled {
+  opacity: 0.35;
+}
+
+.slider-value {
+  width: 82px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+.check input {
+  accent-color: var(--accent);
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.warn-note {
+  font-size: 11px;
+  border-left: 2px solid var(--vamp);
+  padding-left: 8px;
+  margin: 0 0 10px;
+}
+
+.inspector-footer {
+  padding-top: 12px;
+}
+
+.danger-text {
+  background: none;
+  border: none;
+  color: var(--danger);
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.danger-text:hover {
+  text-decoration: underline;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 6px 0 0;
+  font-size: 11px;
+}
+
+/* ---- routing matrix --------------------------------------------------- */
+
+.routing-note {
+  font-size: 11px;
+  margin: 0 0 8px;
+}
+
+.routing-grid {
+  border-collapse: collapse;
+}
+
+.routing-grid th {
+  font-size: 10px;
+  color: var(--dim);
+  font-weight: 500;
+  padding: 2px 4px;
+}
+
+.routing-source {
+  text-align: right !important;
+  padding-right: 8px !important;
+}
+
+.routing-grid td {
+  padding: 2px;
+  border: none;
+}
+
+.crosspoint {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 3px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  font-size: 9px;
+  color: #10131a;
+}
+
+.crosspoint.on {
+  background: var(--live);
+  border-color: var(--live);
+  font-weight: 700;
+}
+
+.routing-grid.implicit .crosspoint.on {
+  background: rgba(157, 124, 255, 0.55);
+  border-color: rgba(157, 124, 255, 0.7);
+}

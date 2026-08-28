@@ -16,11 +16,13 @@ import {
 interface Props {
   cues: Cue[];
   standby: Standby;
+  selectedIndex: number;
   active: ActiveCueInfo[];
   missingAudio: string[];
   expanded: Set<string>;
   onToggleExpand: (cueId: string) => void;
   onStandby: (standby: Standby) => void;
+  onSelect: (index: number) => void;
   onFire: (index: number) => void;
 }
 
@@ -128,8 +130,15 @@ export function CueList(props: Props) {
     rows.push(
       <tr
         key={cue.id}
-        className={`cue-row${markHeader ? ' standby' : ''}`}
-        onClick={() => props.onStandby({ index, step: cueHeaderStep })}
+        className={`cue-row${markHeader ? ' standby' : ''}${
+          props.selectedIndex === index ? ' selected' : ''
+        }`}
+        onClick={() => {
+          // Clicking a cue header selects it for editing AND stands it by, the
+          // way the desktop's list does.
+          props.onSelect(index);
+          props.onStandby({ index, step: cueHeaderStep });
+        }}
         onDoubleClick={() => props.onFire(index)}
       >
         <td className="status">
