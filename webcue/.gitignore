@@ -1,2 +1,3 @@
 build/
 web/webcue-engine.wasm
+node_modules/
