@@ -18,6 +18,13 @@ BUILD="webcue/build"
 WEB="webcue/web"
 mkdir -p "$BUILD"
 
+# webcue/package.json declares "type": "module" for the workspace, which Node
+# then applies to every .js file beneath it — including Emscripten's generated
+# harness glue, which is CommonJS and calls require(). Scoping the build
+# directory back to CommonJS is the smallest fix; renaming the outputs to .cjs
+# would mean fighting emcc, which picks its output format by extension.
+echo '{ "type": "commonjs" }' > "$BUILD/package.json"
+
 # The engine sources: SimpleCue's own audio-thread code, unmodified, plus the
 # C boundary. The include order puts webcue/shim ahead of Source so that
 # Model/Cue.h and Audio/SampleSource.h resolve to the browser versions while
@@ -35,9 +42,11 @@ EXPORTS=$EXPORTS,_wc_voice_stop,_wc_voice_release_vamp,_wc_voice_gain_ramp
 EXPORTS=$EXPORTS,_wc_voice_schedule_stop,_wc_voice_set_paused,_wc_voice_state
 EXPORTS=$EXPORTS,_wc_voice_position,_wc_voice_sounded,_wc_voice_is_vamping
 EXPORTS=$EXPORTS,_wc_voice_gain,_wc_voice_play_passes,_wc_voice_vamp_passes
-EXPORTS=$EXPORTS,_wc_recycle_finished,_wc_find_free_voice,_wc_set_master_gain
+EXPORTS=$EXPORTS,_wc_drain_finished,_wc_finished_ptr,_wc_set_master_gain
 EXPORTS=$EXPORTS,_wc_output_ptr,_wc_spec_ptr,_wc_spec_size,_wc_block_size
 EXPORTS=$EXPORTS,_wc_max_voices,_wc_num_outputs,_malloc,_free
+
+WORKLET="webcue/packages/engine/worklet/webcue-processor.js"
 
 build_engine() {
   echo "==> engine -> $WEB/webcue-engine.wasm"
@@ -47,6 +56,11 @@ build_engine() {
     -sEXPORTED_FUNCTIONS="$EXPORTS" \
     -o "$WEB/webcue-engine.wasm"
   ls -la "$WEB/webcue-engine.wasm"
+
+  # The worklet has ONE copy, in packages/engine. The demo gets a build-time
+  # copy rather than its own edition, because two hand-maintained versions of a
+  # real-time file is how they drift.
+  cp "$WORKLET" "$WEB/webcue-processor.js"
 }
 
 build_verify() {

@@ -84,7 +84,22 @@ const log = (m) => {
 
 let ctx = null, node = null, sampleRate = 48000;
 let standby = 0;
-const voiceForCue = new Map();
+let maxVoices = 32;
+let nextGeneration = 1;
+
+/** Slot -> cue number. This IS the allocator: the worklet does not choose
+    voices, because the real sequencer schedules a whole link chain
+    synchronously and has to know each slot before it can name the next cue's
+    parent. Allocating here is what lets a crossfade arm its stop on the same
+    tick it fires the target, with no round trip. */
+const busy = new Map();
+
+function allocate() {
+  for (let slot = 0; slot < maxVoices; slot++) {
+    if (!busy.has(slot)) return { slot, generation: nextGeneration++ };
+  }
+  return null;
+}
 
 // --- the cue list -----------------------------------------------------------
 // Times in seconds; converted to samples when a cue is fired, which is what
@@ -205,24 +220,36 @@ document.getElementById('start').onclick = async () => {
   }
 
   log(`AudioContext running at ${sampleRate} Hz, ${ctx.baseLatency ? (ctx.baseLatency * 1000).toFixed(1) + ' ms base latency' : ''}`);
-  setInterval(() => node.port.postMessage({ type: 'query' }), 100);
+  // No polling: the worklet posts a snapshot on its own decimation, and posts
+  // finishes as they happen.
 };
 
 function onWorkletMessage(msg) {
   switch (msg.type) {
     case 'ready':
+      maxVoices = msg.maxVoices;
       log(`engine ready — ${msg.numOutputs} out, ${msg.maxVoices} voices, block ${msg.blockSize}`);
       break;
+
     case 'sourceLoaded':
       log(`source 0 loaded — ${msg.numFrames} frames x ${msg.numChannels} ch`);
       break;
-    case 'fired':
-      voiceForCue.set(msg.voice, msg.cueId);
-      log(`cue ${msg.cueId} -> voice ${msg.voice}`);
-      break;
-    case 'state':
+
+    case 'snapshot':
       renderVoices(msg.voices);
       break;
+
+    case 'finished':
+      // The engine reports a finish before recycling the voice, which is what
+      // makes an open-ended auto-follow possible at all: without it the voice
+      // would go finished -> idle inside one block and nobody could see it.
+      for (const ref of msg.voices) {
+        const cueId = busy.get(ref.slot);
+        busy.delete(ref.slot);
+        if (cueId !== undefined) log(`cue ${cueId} finished (voice ${ref.slot})`);
+      }
+      break;
+
     case 'error':
       log(`ERROR: ${msg.message}`);
       break;
@@ -236,7 +263,9 @@ function renderVoices(voices) {
 
   if (voices.length === 0) {
     tbody.innerHTML = '<tr><td colspan="6" class="empty">Nothing running.</td></tr>';
-    for (const v of [...voiceForCue.keys()]) voiceForCue.delete(v);
+    // Slots are freed by the 'finished' message, not by an empty snapshot — a
+    // snapshot only says what is sounding now, and clearing here would drop a
+    // voice that is still in its pre-wait.
     return;
   }
 
@@ -250,8 +279,8 @@ function renderVoices(voices) {
     const pct = Math.min(100, Math.round(v.gain * 100));
 
     tr.innerHTML =
-      `<td class="mono">${v.voice}</td>` +
-      `<td class="mono">${voiceForCue.get(v.voice) ?? '—'}</td>` +
+      `<td class="mono">${v.slot}</td>` +
+      `<td class="mono">${busy.get(v.slot) ?? '—'}</td>` +
       `<td class="${cls}">${label}</td>` +
       `<td class="mono">${secs}s</td>` +
       `<td class="mono">play ${v.playPasses} / vamp ${v.vampPasses}</td>` +
@@ -287,39 +316,63 @@ function specForCue(cue) {
 
 document.getElementById('go').onclick = () => {
   const cue = cues[standby];
-  node.port.postMessage({ type: 'fire', cueId: cue.number, spec: specForCue(cue) });
+  const ref = allocate();
+
+  if (ref === null) {
+    log('no free voice');
+    return;
+  }
+
+  busy.set(ref.slot, cue.number);
+  node.port.postMessage({ type: 'start', slot: ref.slot, generation: ref.generation, spec: specForCue(cue) });
+  log(`cue ${cue.number} -> voice ${ref.slot}`);
 
   if (cue.scheduleStopAt != null) {
-    // Armed against the voice the engine is about to allocate. The desktop app
-    // resolves the voice index the same way, on the message thread, before the
-    // start command reaches the audio thread.
+    // No round trip and no timer: the slot was decided here, so the stop can be
+    // armed on the same tick the cue is fired. This is exactly why allocation
+    // moved to the main thread — a crossfade has to do this for real.
     const at = Math.round(cue.scheduleStopAt * sampleRate);
     const fade = Math.round(cue.scheduleStopFade * sampleRate);
-    setTimeout(() => {
-      const voice = [...voiceForCue.entries()].find(([, id]) => id === cue.number)?.[0];
-      if (voice != null) {
-        node.port.postMessage({ type: 'scheduleStop', voice, atSounded: at, fadeSamples: fade, shape: FadeShape.equalPower });
-        log(`cue ${cue.number}: stop armed at sounded sample ${at}`);
-      }
-    }, 30);
+
+    node.port.postMessage({
+      type: 'scheduleStop',
+      slot: ref.slot,
+      generation: ref.generation,
+      atSounded: at,
+      fadeSamples: fade,
+      shape: FadeShape.equalPower,
+    });
+
+    log(`cue ${cue.number}: stop armed at sounded sample ${at}`);
   }
 
   standby = Math.min(cues.length - 1, standby + 1);
   renderCueList();
 };
 
+// The worklet has no "all voices" commands: which voices belong to a cue, and
+// which are worth stopping, is a decision, and decisions live on this side.
+function forEachVoice(fn) {
+  for (const slot of busy.keys()) fn(slot);
+}
+
 document.getElementById('devamp').onclick = () => {
-  node.port.postMessage({ type: 'releaseAllVamps' });
+  forEachVoice((slot) => node.port.postMessage({ type: 'releaseVamp', slot }));
   log('vamp released');
 };
 
 document.getElementById('stop').onclick = () => {
-  node.port.postMessage({ type: 'stopAll', fadeSamples: Math.round(2 * sampleRate), shape: FadeShape.equalPower });
+  const fadeSamples = Math.round(2 * sampleRate);
+  forEachVoice((slot) =>
+    node.port.postMessage({ type: 'stop', slot, fadeSamples, shape: FadeShape.equalPower }),
+  );
   log('fading all over 2s');
 };
 
 document.getElementById('panic').onclick = () => {
-  node.port.postMessage({ type: 'stopAll', fadeSamples: 0, shape: FadeShape.linear });
+  forEachVoice((slot) =>
+    node.port.postMessage({ type: 'stop', slot, fadeSamples: 0, shape: FadeShape.linear }),
+  );
   log('panic');
 };
 </script>

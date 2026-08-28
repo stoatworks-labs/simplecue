@@ -40,6 +40,9 @@ struct Engine
     SourceSlot   sources[kMaxSources];
     juce::AudioBuffer<float> output;
 
+    /** Slots reported by the last wc_drain_finished(). */
+    int finished[kMaxVoices] {};
+
     double sampleRate { 48000.0 };
     int    blockSize { 128 };
     int    numOutputs { 2 };
@@ -143,14 +146,26 @@ int wc_source_set (int index, const float* base, int numChannels, int numFrames,
     return 1;
 }
 
-/** Applies the staged spec to a voice. Mirrors AudioEngine's rule that a spec
-    is written into an idle voice and only then handed over. */
+/** Applies the staged spec to the slot the MAIN THREAD has allocated.
+    Mirrors AudioEngine's rule that a spec is written into an idle voice and only
+    then handed over.
+
+    Note there is deliberately no find-a-free-voice function on this side any
+    more. scheduleLink recurses synchronously and has to know the slot before it
+    can fill in the next cue's parent, so allocation cannot be asynchronous and
+    cannot live behind a postMessage. The main thread allocates; this applies. */
 int wc_voice_set_spec (int voiceIndex)
 {
     if (voiceIndex < 0 || voiceIndex >= kMaxVoices)
         return 0;
 
     auto& voice = g.voices[voiceIndex];
+
+    // The caller may legitimately be reusing a slot whose finish has not been
+    // drained yet — it learned the voice was free some other way, or a drain is
+    // pending this block. Reclaim it rather than refusing the start.
+    if (voice.isFinished())
+        voice.recycle();
 
     if (voice.getState() != CueVoice::State::idle)
         return 0;
@@ -269,33 +284,36 @@ int wc_voice_vamp_passes (int i)
     return (i >= 0 && i < kMaxVoices) ? g.voices[i].getVampPassCount() : 0;
 }
 
-/** Reclaims finished voices. On the desktop this is the message thread's job;
-    here it runs at the top of process(), which is cheap and keeps the JS side
-    from having to poll for it. */
-int wc_recycle_finished()
-{
-    int reclaimed = 0;
+/** Collects the voices that have finished since the last call, writing their
+    slot indices into @p out, then recycles them. Returns how many were written.
 
-    for (auto& v : g.voices)
+    This REPLACES a plain recycle, and the difference matters. A voice goes
+    finished -> idle inside one render quantum, so anything that merely recycled
+    would leave the main thread no way to observe a finish at all — and an
+    open-ended auto-follow, which fires exactly when its source finishes, would
+    then never fire. The finish has to be reported before it is erased.
+
+    Recycling here is safe because the wasm pool is not the allocator: the main
+    thread owns slot assignment and keeps its own record until it has processed
+    the finish. An idle wasm voice cannot be handed to anyone by this side. */
+int wc_drain_finished()
+{
+    int count = 0;
+
+    for (int i = 0; i < kMaxVoices; ++i)
     {
-        if (v.isFinished())
-        {
-            v.recycle();
-            ++reclaimed;
-        }
+        if (! g.voices[i].isFinished())
+            continue;
+
+        g.finished[count++] = i;
+        g.voices[i].recycle();
     }
 
-    return reclaimed;
+    return count;
 }
 
-int wc_find_free_voice()
-{
-    for (int i = 0; i < kMaxVoices; ++i)
-        if (g.voices[i].getState() == CueVoice::State::idle)
-            return i;
-
-    return -1;
-}
+/** The slots wc_drain_finished() just reported, as int32. */
+const int* wc_finished_ptr() { return g.finished; }
 
 void wc_set_master_gain (float g_) { g.masterGain = g_; }
 
