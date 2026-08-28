@@ -1,0 +1,327 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>webcue spike</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1c1f25; --line: #2c313a;
+    --text: #e6e9ef; --dim: #8b93a3; --accent: #6ea8fe; --live: #5ddb9a; --vamp: #ffc857;
+    font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  body { margin: 0; padding: 24px; background: var(--bg); color: var(--text); }
+  h1 { font-size: 17px; margin: 0 0 4px; font-weight: 600; }
+  .sub { color: var(--dim); font-size: 13px; margin-bottom: 20px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  button {
+    background: var(--panel); color: var(--text); border: 1px solid var(--line);
+    padding: 8px 14px; border-radius: 6px; font-size: 13px; cursor: pointer;
+  }
+  button:hover:not(:disabled) { border-color: var(--accent); }
+  button:disabled { opacity: .4; cursor: default; }
+  button.go { background: var(--accent); color: #10131a; border-color: var(--accent); font-weight: 600; }
+  table { border-collapse: collapse; width: 100%; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--dim); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: .05em; }
+  tr.standby td { background: rgba(110,168,254,.10); }
+  tr.standby td:first-child { box-shadow: inset 3px 0 0 var(--accent); }
+  .tag { font-size: 11px; padding: 2px 6px; border-radius: 4px; background: var(--line); color: var(--dim); }
+  .mono { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+  #voices { margin-top: 22px; }
+  .live { color: var(--live); } .vamping { color: var(--vamp); font-weight: 600; }
+  .empty { color: var(--dim); font-size: 13px; padding: 10px 0; }
+  .meterwrap { width: 90px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; }
+  .meter { height: 100%; background: var(--live); width: 0%; }
+  #log { margin-top: 18px; font-size: 12px; color: var(--dim); white-space: pre-wrap;
+         max-height: 130px; overflow-y: auto; font-family: ui-monospace, Menlo, monospace; }
+</style>
+</head>
+<body>
+
+<h1>webcue — CueVoice running in an AudioWorklet</h1>
+<div class="sub">
+  The playback engine is <span class="mono">Source/Audio/CueVoice.cpp</span>, unmodified,
+  compiled to WebAssembly. Cue 2 loops; cue 3 vamps until you release it; cue 4 arms a
+  sample-accurate scheduled stop.
+</div>
+
+<div class="row">
+  <button id="start" class="go">Start audio</button>
+  <button id="go" disabled>GO</button>
+  <button id="devamp" disabled>Release vamp</button>
+  <button id="stop" disabled>Fade all (2s)</button>
+  <button id="panic" disabled>Panic</button>
+</div>
+
+<table>
+  <thead>
+    <tr><th>#</th><th>Cue</th><th>Behaviour</th><th>In / out</th><th>Fades</th></tr>
+  </thead>
+  <tbody id="cuelist"></tbody>
+</table>
+
+<div id="voices">
+  <table>
+    <thead>
+      <tr><th>Voice</th><th>Cue</th><th>State</th><th>Position</th><th>Passes</th><th>Gain</th></tr>
+    </thead>
+    <tbody id="voicelist"><tr><td colspan="6" class="empty">Nothing running.</td></tr></tbody>
+  </table>
+</div>
+
+<div id="log"></div>
+
+<script type="module">
+const FadeShape = { linear: 0, equalPower: 1, exponential: 2, logarithmic: 3, sCurve: 4 };
+const VampRelease = { atEndOfPass: 0, immediately: 1 };
+
+const logEl = document.getElementById('log');
+const log = (m) => {
+  logEl.textContent += m + '\n';
+  logEl.scrollTop = logEl.scrollHeight;
+};
+
+let ctx = null, node = null, sampleRate = 48000;
+let standby = 0;
+const voiceForCue = new Map();
+
+// --- the cue list -----------------------------------------------------------
+// Times in seconds; converted to samples when a cue is fired, which is what
+// AudioEngine does on the desktop (specs are resolved to device samples on the
+// message thread, never inside the audio callback).
+const cues = [
+  {
+    number: '1', name: 'Opening — gentle fade in',
+    behaviour: 'plain cue, 2s fade in',
+    startTime: 0, endTime: 4,
+    fadeInTime: 2, fadeInShape: FadeShape.sCurve,
+    fadeOutTime: 1, fadeOutShape: FadeShape.equalPower,
+  },
+  {
+    number: '2', name: 'Underscore — loops x3',
+    behaviour: 'loop, 3 passes',
+    startTime: 0, endTime: 2,
+    loopEnabled: true, loopCount: 3,
+    fadeInTime: 0.4, fadeInShape: FadeShape.linear,
+    fadeOutTime: 0.8, fadeOutShape: FadeShape.logarithmic,
+  },
+  {
+    number: '3', name: 'Scene change — vamps',
+    behaviour: 'vamps 2s–4s until released',
+    startTime: 0, endTime: 8,
+    vampEnabled: true, vampStart: 2, vampEnd: 4,
+    vampRelease: VampRelease.atEndOfPass,
+    fadeInTime: 0.5, fadeInShape: FadeShape.equalPower,
+    fadeOutTime: 1, fadeOutShape: FadeShape.equalPower,
+  },
+  {
+    number: '4', name: 'Handover — scheduled stop',
+    behaviour: 'stop armed at 3.0s exactly',
+    startTime: 0, endTime: 8,
+    fadeInTime: 0.3, fadeInShape: FadeShape.equalPower,
+    scheduleStopAt: 3.0, scheduleStopFade: 1.5,
+  },
+];
+
+function renderCueList() {
+  const tbody = document.getElementById('cuelist');
+  tbody.innerHTML = '';
+
+  cues.forEach((cue, i) => {
+    const tr = document.createElement('tr');
+    if (i === standby) tr.className = 'standby';
+    const fades = `${cue.fadeInTime ?? 0}s / ${cue.fadeOutTime ?? 0}s`;
+    tr.innerHTML =
+      `<td class="mono">${cue.number}</td>` +
+      `<td>${cue.name}</td>` +
+      `<td><span class="tag">${cue.behaviour}</span></td>` +
+      `<td class="mono">${cue.startTime}s – ${cue.endTime}s</td>` +
+      `<td class="mono">${fades}</td>`;
+    tr.onclick = () => { standby = i; renderCueList(); };
+    tbody.appendChild(tr);
+  });
+}
+renderCueList();
+
+// --- a source you can hear the structure of ---------------------------------
+// Eight seconds, one scale step per second, with a short click at each second
+// boundary. Loop wraps and vamp circles are then audible as repeated pitches
+// rather than needing a scope to see.
+function buildTestSource(rate) {
+  const seconds = 8;
+  const frames = Math.floor(rate * seconds);
+  const semitones = [0, 2, 4, 5, 7, 9, 11, 12];
+  const left = new Float32Array(frames);
+  const right = new Float32Array(frames);
+
+  for (let i = 0; i < frames; i++) {
+    const t = i / rate;
+    const step = Math.min(semitones.length - 1, Math.floor(t));
+    const freq = 220 * Math.pow(2, semitones[step] / 12);
+    const intoStep = t - step;
+
+    // Short envelope per step so each note is distinct.
+    const env = Math.min(1, intoStep * 40) * Math.exp(-intoStep * 1.4);
+    const tone = Math.sin(2 * Math.PI * freq * t) * 0.28 * env;
+    const fifth = Math.sin(2 * Math.PI * freq * 1.5 * t) * 0.10 * env;
+
+    left[i] = tone + fifth * 0.6;
+    right[i] = tone * 0.85 + fifth;
+  }
+
+  return { channels: [left, right], numFrames: frames, rate };
+}
+
+// --- wiring -----------------------------------------------------------------
+document.getElementById('start').onclick = async () => {
+  if (ctx) return;
+
+  ctx = new AudioContext();
+  await ctx.resume();
+  sampleRate = ctx.sampleRate;
+
+  const wasmBytes = await (await fetch('webcue-engine.wasm')).arrayBuffer();
+  await ctx.audioWorklet.addModule('webcue-processor.js');
+
+  node = new AudioWorkletNode(ctx, 'webcue-processor', {
+    numberOfInputs: 0,
+    numberOfOutputs: 1,
+    outputChannelCount: [2],
+    processorOptions: { wasmBytes, numOutputs: 2 },
+  });
+
+  node.port.onmessage = (e) => onWorkletMessage(e.data);
+  node.connect(ctx.destination);
+
+  const src = buildTestSource(sampleRate);
+  node.port.postMessage({ type: 'loadSource', index: 0, ...src }, [
+    src.channels[0].buffer, src.channels[1].buffer,
+  ]);
+
+  document.getElementById('start').disabled = true;
+  for (const id of ['go', 'devamp', 'stop', 'panic']) {
+    document.getElementById(id).disabled = false;
+  }
+
+  log(`AudioContext running at ${sampleRate} Hz, ${ctx.baseLatency ? (ctx.baseLatency * 1000).toFixed(1) + ' ms base latency' : ''}`);
+  setInterval(() => node.port.postMessage({ type: 'query' }), 100);
+};
+
+function onWorkletMessage(msg) {
+  switch (msg.type) {
+    case 'ready':
+      log(`engine ready — ${msg.numOutputs} out, ${msg.maxVoices} voices, block ${msg.blockSize}`);
+      break;
+    case 'sourceLoaded':
+      log(`source 0 loaded — ${msg.numFrames} frames x ${msg.numChannels} ch`);
+      break;
+    case 'fired':
+      voiceForCue.set(msg.voice, msg.cueId);
+      log(`cue ${msg.cueId} -> voice ${msg.voice}`);
+      break;
+    case 'state':
+      renderVoices(msg.voices);
+      break;
+    case 'error':
+      log(`ERROR: ${msg.message}`);
+      break;
+  }
+}
+
+const stateNames = ['idle', 'reserved', 'pre-wait', 'playing', 'stopping', 'finished'];
+
+function renderVoices(voices) {
+  const tbody = document.getElementById('voicelist');
+
+  if (voices.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">Nothing running.</td></tr>';
+    for (const v of [...voiceForCue.keys()]) voiceForCue.delete(v);
+    return;
+  }
+
+  tbody.innerHTML = '';
+
+  for (const v of voices) {
+    const tr = document.createElement('tr');
+    const secs = (v.position / sampleRate).toFixed(3);
+    const cls = v.vamping ? 'vamping' : 'live';
+    const label = v.vamping ? 'VAMP' : stateNames[v.state] ?? v.state;
+    const pct = Math.min(100, Math.round(v.gain * 100));
+
+    tr.innerHTML =
+      `<td class="mono">${v.voice}</td>` +
+      `<td class="mono">${voiceForCue.get(v.voice) ?? '—'}</td>` +
+      `<td class="${cls}">${label}</td>` +
+      `<td class="mono">${secs}s</td>` +
+      `<td class="mono">play ${v.playPasses} / vamp ${v.vampPasses}</td>` +
+      `<td><div class="meterwrap"><div class="meter" style="width:${pct}%"></div></div></td>`;
+    tbody.appendChild(tr);
+  }
+}
+
+function specForCue(cue) {
+  const s = (seconds) => Math.round(seconds * sampleRate);
+  return {
+    sourceIndex: 0,
+    regionStart: s(cue.startTime),
+    regionEnd: s(cue.endTime),
+    preWaitSamples: s(cue.preWait ?? 0),
+    loopEnabled: !!cue.loopEnabled,
+    loopCount: cue.loopCount ?? 0,
+    vampEnabled: !!cue.vampEnabled,
+    vampStart: s(cue.vampStart ?? 0),
+    vampEnd: s(cue.vampEnd ?? 0),
+    vampRelease: cue.vampRelease ?? 0,
+    gain: cue.gain ?? 1,
+    fadeInSamples: s(cue.fadeInTime ?? 0),
+    fadeInShape: cue.fadeInShape ?? FadeShape.equalPower,
+    fadeOutSamples: s(cue.fadeOutTime ?? 0),
+    fadeOutShape: cue.fadeOutShape ?? FadeShape.equalPower,
+    routes: [
+      { source: 0, output: 0, gain: 1 },
+      { source: 1, output: 1, gain: 1 },
+    ],
+  };
+}
+
+document.getElementById('go').onclick = () => {
+  const cue = cues[standby];
+  node.port.postMessage({ type: 'fire', cueId: cue.number, spec: specForCue(cue) });
+
+  if (cue.scheduleStopAt != null) {
+    // Armed against the voice the engine is about to allocate. The desktop app
+    // resolves the voice index the same way, on the message thread, before the
+    // start command reaches the audio thread.
+    const at = Math.round(cue.scheduleStopAt * sampleRate);
+    const fade = Math.round(cue.scheduleStopFade * sampleRate);
+    setTimeout(() => {
+      const voice = [...voiceForCue.entries()].find(([, id]) => id === cue.number)?.[0];
+      if (voice != null) {
+        node.port.postMessage({ type: 'scheduleStop', voice, atSounded: at, fadeSamples: fade, shape: FadeShape.equalPower });
+        log(`cue ${cue.number}: stop armed at sounded sample ${at}`);
+      }
+    }, 30);
+  }
+
+  standby = Math.min(cues.length - 1, standby + 1);
+  renderCueList();
+};
+
+document.getElementById('devamp').onclick = () => {
+  node.port.postMessage({ type: 'releaseAllVamps' });
+  log('vamp released');
+};
+
+document.getElementById('stop').onclick = () => {
+  node.port.postMessage({ type: 'stopAll', fadeSamples: Math.round(2 * sampleRate), shape: FadeShape.equalPower });
+  log('fading all over 2s');
+};
+
+document.getElementById('panic').onclick = () => {
+  node.port.postMessage({ type: 'stopAll', fadeSamples: 0, shape: FadeShape.linear });
+  log('panic');
+};
+</script>
+</body>
+</html>
