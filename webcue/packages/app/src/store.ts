@@ -14,9 +14,29 @@ import {
   makeCue,
   makeShow,
   parseShow,
+  serialiseShow,
   standbyForCue,
 } from '@webcue/core';
 import type { WebCueEngine } from '@webcue/engine';
+
+import { audioPathsOf, buildBundle, bundleExtension, readBundle } from './bundle.ts';
+import type { DirectoryHandleLike, FileHandleLike } from './files.ts';
+import {
+  downloadBlob,
+  ensurePermission,
+  forgetHandle,
+  hasDirectoryAccess,
+  hasFileSystemAccess,
+  pickBundleFile,
+  pickDirectory,
+  pickSaveHandle,
+  pickShowFile,
+  recallHandle,
+  rememberHandle,
+  resolveInDirectory,
+  wasCancelled,
+  writeFile,
+} from './files.ts';
 
 export type EngineStatus = 'idle' | 'starting' | 'running' | 'failed';
 
@@ -43,6 +63,15 @@ export interface AppSnapshot {
   paused: boolean;
   masterGainDb: number;
   missingAudio: string[];
+  /** The show folder, once picked. Relative paths resolve against it exactly as
+      they do on the desktop. */
+  folderName: string | null;
+  /** A remembered folder whose permission has lapsed. This is NOT the same as
+      the audio being missing, and the UI must not conflate them: one is fixed
+      by a click, the other by finding the files. */
+  folderNeedsPermission: boolean;
+  canSaveInPlace: boolean;
+  canPickFolder: boolean;
   foldCandidates: FoldCandidate[];
   foldPromptOpen: boolean;
   numOutputs: number;
@@ -55,6 +84,17 @@ export class AppStore {
 
   private engine: WebCueEngine | null = null;
   private sequencer: Sequencer | null = null;
+
+  /** The ENCODED bytes of every loaded file, keyed by the path the show
+      records. Kept because decodeAudioData detaches its input and the decoded
+      audio is transferred to the worklet, so without this a bundle could not be
+      written without asking for every file again. Encoded audio is a fraction
+      of the decoded size, so this is cheap next to what the engine already
+      holds. */
+  private library = new Map<string, ArrayBuffer>();
+
+  private showHandle: FileHandleLike | null = null;
+  private folder: DirectoryHandleLike | null = null;
 
   constructor() {
     this.snapshot = {
@@ -69,6 +109,10 @@ export class AppStore {
       paused: false,
       masterGainDb: 0,
       missingAudio: [],
+      folderName: null,
+      folderNeedsPermission: false,
+      canSaveInPlace: hasFileSystemAccess(),
+      canPickFolder: hasDirectoryAccess(),
       foldCandidates: [],
       foldPromptOpen: false,
       numOutputs: 2,
@@ -151,23 +195,48 @@ export class AppStore {
 
   //== Show =================================================================
 
-  async openShow(file: File): Promise<void> {
+  /** Loads one file's bytes: a copy is kept for bundling, a copy goes to the
+      engine. Two copies because decodeAudioData DETACHES the buffer it is
+      given — pass the original and the library ends up holding nothing. */
+  private async loadAudioBytes(path: string, bytes: ArrayBuffer): Promise<boolean> {
+    if (!this.engine || this.engine.hasSource(path)) return false;
+
+    try {
+      await this.engine.loadSource(path, bytes.slice(0));
+      this.library.set(path, bytes);
+      return true;
+    } catch (e) {
+      this.say(`could not decode ${path}: ${(e as Error).message}`);
+      return false;
+    }
+  }
+
+  private applyShow(show: ShowData, name: string): void {
+    this.set({
+      show,
+      showName: name,
+      dirty: false,
+      masterGainDb: show.masterGainDb,
+      standby: show.cues.length > 0 ? standbyForCue(show.cues, 0) : { index: -1, step: -1 },
+      selectedIndex: show.cues.length > 0 ? 0 : -1,
+    });
+
+    this.sequencer?.setCues(show.cues);
+    this.engine?.setMasterGain(dbToGain(show.masterGainDb));
+  }
+
+  async openShow(file: File, handle: FileHandleLike | null = null): Promise<void> {
     try {
       const show = parseShow(await file.text());
-      const name = file.name.replace(/\.cueshow$/i, '');
 
-      this.set({
-        show,
-        showName: name,
-        dirty: false,
-        masterGainDb: show.masterGainDb,
-        standby: show.cues.length > 0 ? standbyForCue(show.cues, 0) : { index: -1, step: -1 },
-      });
-
-      this.sequencer?.setCues(show.cues);
-      this.engine?.setMasterGain(dbToGain(show.masterGainDb));
+      this.showHandle = handle;
+      this.applyShow(show, file.name.replace(/\.cueshow$/i, ''));
 
       this.say(`opened ${file.name} — ${show.cues.length} cues`);
+
+      // A show opened through a handle usually sits beside its audio, so try
+      // the folder we already have before asking for anything.
+      await this.resolveFromFolder();
       this.updateMissing();
       this.checkRouting();
     } catch (e) {
@@ -176,32 +245,141 @@ export class AppStore {
     }
   }
 
-  /** Matches picked files to the paths the show refers to. A show stores paths
-      relative to itself, which a browser cannot resolve, so this matches on the
-      basename — good enough to run a show, and replaced in the phase that does
-      File System Access properly. */
+  /** Chromium: a real picker, and a handle we can save back through. */
+  async openShowViaPicker(): Promise<void> {
+    try {
+      const picked = await pickShowFile();
+      if (picked) await this.openShow(picked.file, picked.handle);
+    } catch (e) {
+      if (!wasCancelled(e)) this.say(`could not open: ${(e as Error).message}`);
+    }
+  }
+
+  async openBundle(file: File): Promise<void> {
+    try {
+      const { show, audio, missing } = await readBundle(file);
+
+      this.showHandle = null;
+      this.library.clear();
+      this.applyShow(show, file.name.replace(/\.cueshowpack$/i, ''));
+
+      for (const [path, bytes] of audio) await this.loadAudioBytes(path, bytes);
+
+      this.say(
+        `opened ${file.name} — ${show.cues.length} cues, ${audio.size} audio file${audio.size === 1 ? '' : 's'}` +
+          (missing.length > 0 ? `, ${missing.length} missing from the bundle` : ''),
+      );
+
+      this.updateMissing();
+      this.checkRouting();
+    } catch (e) {
+      this.say(`could not open ${file.name}: ${(e as Error).message}`);
+    }
+  }
+
+  async openBundleViaPicker(): Promise<void> {
+    try {
+      const file = await pickBundleFile();
+      if (file) await this.openBundle(file);
+    } catch (e) {
+      if (!wasCancelled(e)) this.say(`could not open: ${(e as Error).message}`);
+    }
+  }
+
+  /** Picks the folder the show lives in. Relative paths then resolve against it
+      the way they do on the desktop, rather than being guessed at by name. */
+  async pickShowFolder(): Promise<void> {
+    try {
+      const dir = await pickDirectory();
+      if (!dir) return;
+
+      this.folder = dir;
+      this.set({ folderName: dir.name, folderNeedsPermission: false });
+      await rememberHandle('showFolder', dir);
+
+      const found = await this.resolveFromFolder();
+      this.say(
+        found > 0
+          ? `found ${found} audio file${found === 1 ? '' : 's'} in ${dir.name}`
+          : `no matching audio in ${dir.name}`,
+      );
+
+      this.updateMissing();
+    } catch (e) {
+      if (!wasCancelled(e)) this.say(`could not open that folder: ${(e as Error).message}`);
+    }
+  }
+
+  /** Re-offers a folder remembered from a previous session. The handle survives
+      but its permission does not, so this is a prompt rather than a silent
+      reconnect — a page cannot read your disk again just because it did once. */
+  async recallFolder(): Promise<void> {
+    const dir = await recallHandle<DirectoryHandleLike>('showFolder');
+    if (!dir) return;
+
+    this.folder = dir;
+    this.set({ folderName: dir.name, folderNeedsPermission: true });
+  }
+
+  async grantRememberedFolder(): Promise<void> {
+    if (!this.folder) return;
+
+    const outcome = await ensurePermission(this.folder, 'read');
+
+    if (outcome !== 'granted') {
+      this.say(`permission for ${this.folder.name} was not granted`);
+      this.folder = null;
+      this.set({ folderName: null, folderNeedsPermission: false });
+      await forgetHandle('showFolder');
+      return;
+    }
+
+    this.set({ folderNeedsPermission: false });
+    const found = await this.resolveFromFolder();
+    this.say(`reconnected ${this.snapshot.folderName} — ${found} audio file${found === 1 ? '' : 's'}`);
+    this.updateMissing();
+  }
+
+  /** Resolves every unloaded path against the show folder, by its RELATIVE
+      path, which is the whole reason a folder is worth having. */
+  private async resolveFromFolder(): Promise<number> {
+    if (!this.folder || this.snapshot.folderNeedsPermission) return 0;
+
+    let found = 0;
+
+    for (const path of audioPathsOf(this.snapshot.show)) {
+      if (this.engine?.hasSource(path)) continue;
+
+      const file = await resolveInDirectory(this.folder, path);
+      if (!file) continue;
+
+      if (await this.loadAudioBytes(path, await file.arrayBuffer())) found++;
+    }
+
+    if (found > 0) this.refresh();
+    return found;
+  }
+
+  /** The fallback for browsers with no directory access, and for filling gaps.
+      Matching is by basename, which cannot tell two files of the same name in
+      different folders apart — the folder path above does, which is why it is
+      preferred wherever it exists. */
   async addAudioFiles(files: FileList | File[]): Promise<void> {
     if (!this.engine) return;
 
     const wanted = new Map<string, string>();
 
-    for (const cue of this.snapshot.show.cues) {
-      if (cue.type !== 'audioFile' || cue.audioFile.length === 0) continue;
-      wanted.set(basename(cue.audioFile), cue.audioFile);
+    for (const path of audioPathsOf(this.snapshot.show)) {
+      wanted.set(basename(path), path);
     }
 
     let loaded = 0;
 
     for (const file of Array.from(files)) {
       const path = wanted.get(file.name);
-      if (path === undefined || this.engine.hasSource(path)) continue;
+      if (path === undefined) continue;
 
-      try {
-        await this.engine.loadSource(path, await file.arrayBuffer());
-        loaded++;
-      } catch (e) {
-        this.say(`could not decode ${file.name}: ${(e as Error).message}`);
-      }
+      if (await this.loadAudioBytes(path, await file.arrayBuffer())) loaded++;
     }
 
     if (loaded > 0) this.say(`loaded ${loaded} audio file${loaded === 1 ? '' : 's'}`);
@@ -211,14 +389,82 @@ export class AppStore {
   }
 
   private updateMissing(): void {
-    const missing: string[] = [];
+    const missing = audioPathsOf(this.snapshot.show).filter(
+      (path) => !this.engine?.hasSource(path),
+    );
 
-    for (const cue of this.snapshot.show.cues) {
-      if (cue.type !== 'audioFile' || cue.audioFile.length === 0) continue;
-      if (!this.engine?.hasSource(cue.audioFile)) missing.push(cue.audioFile);
+    this.set({ missingAudio: missing });
+  }
+
+  //== Saving ===============================================================
+
+  /** Writes back through the handle the show was opened with, when there is
+      one. NOTE: this is not the desktop's atomic temp-file-and-move. Chromium
+      commits on close, which is close; the download fallback has no atomicity
+      at all. The UI does not claim otherwise. */
+  async save(): Promise<void> {
+    const text = serialiseShow(this.snapshot.show);
+
+    if (this.showHandle) {
+      try {
+        const outcome = await ensurePermission(this.showHandle, 'readwrite');
+
+        if (outcome === 'denied') {
+          this.say('permission to write that file was not granted');
+          return;
+        }
+
+        await writeFile(this.showHandle, text);
+        this.set({ dirty: false });
+        this.say(`saved ${this.snapshot.showName}.cueshow`);
+        return;
+      } catch (e) {
+        this.say(`could not save: ${(e as Error).message}`);
+        return;
+      }
     }
 
-    this.set({ missingAudio: [...new Set(missing)] });
+    await this.saveAs();
+  }
+
+  async saveAs(): Promise<void> {
+    const text = serialiseShow(this.snapshot.show);
+    const filename = `${this.snapshot.showName || 'Untitled show'}.cueshow`;
+
+    if (hasFileSystemAccess()) {
+      try {
+        const handle = await pickSaveHandle(filename);
+        if (!handle) return;
+
+        await writeFile(handle, text);
+        this.showHandle = handle;
+        this.set({ dirty: false, showName: handle.name.replace(/\.cueshow$/i, '') });
+        this.say(`saved ${handle.name}`);
+        return;
+      } catch (e) {
+        if (!wasCancelled(e)) this.say(`could not save: ${(e as Error).message}`);
+        return;
+      }
+    }
+
+    downloadBlob(new Blob([text], { type: 'application/json' }), filename);
+    this.set({ dirty: false });
+    this.say(`downloaded ${filename}`);
+  }
+
+  /** The show and every loaded file in one zip. */
+  exportBundle(): void {
+    const paths = audioPathsOf(this.snapshot.show);
+    const have = paths.filter((p) => this.library.has(p));
+    const blob = buildBundle(this.snapshot.show, this.library);
+
+    downloadBlob(blob, `${this.snapshot.showName || 'Untitled show'}${bundleExtension}`);
+
+    this.say(
+      have.length === paths.length
+        ? `exported a bundle with ${have.length} audio file${have.length === 1 ? '' : 's'}`
+        : `exported a bundle — ${paths.length - have.length} file${paths.length - have.length === 1 ? '' : 's'} not loaded and so not included`,
+    );
   }
 
   //== Routing =============================================================
@@ -350,10 +596,7 @@ export class AppStore {
 
     const path = file.name;
 
-    try {
-      await this.engine.loadSource(path, await file.arrayBuffer());
-    } catch (e) {
-      this.say(`could not decode ${file.name}: ${(e as Error).message}`);
+    if (!(await this.loadAudioBytes(path, await file.arrayBuffer())) && !this.engine.hasSource(path)) {
       return;
     }
 

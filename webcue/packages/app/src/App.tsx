@@ -26,6 +26,7 @@ export function App() {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const showInput = useRef<HTMLInputElement>(null);
   const audioInput = useRef<HTMLInputElement>(null);
+  const bundleInput = useRef<HTMLInputElement>(null);
 
   const running = state.status === 'running';
   const anythingPlaying = state.active.length > 0;
@@ -52,6 +53,13 @@ export function App() {
       ),
     [store],
   );
+
+  // Offer a folder remembered from a previous session, without reconnecting it:
+  // permission has to be asked for again, and silently regaining disk access
+  // because a page once had it is not something a browser allows or should.
+  useEffect(() => {
+    void store.recallFolder();
+  }, [store]);
 
   useEffect(
     () =>
@@ -103,15 +111,61 @@ export function App() {
         </div>
 
         <div className="titlebar-actions">
-          <button type="button" onClick={() => showInput.current?.click()}>
+          <button
+            type="button"
+            onClick={() =>
+              state.canSaveInPlace ? void store.openShowViaPicker() : showInput.current?.click()
+            }
+          >
             Open show
           </button>
+
+          <button
+            type="button"
+            onClick={() =>
+              state.canSaveInPlace ? void store.openBundleViaPicker() : bundleInput.current?.click()
+            }
+            title="Open a .cueshowpack — a show with its audio inside it"
+          >
+            Open bundle
+          </button>
+
+          {state.canPickFolder && (
+            <button
+              type="button"
+              disabled={state.show.cues.length === 0}
+              onClick={() => void store.pickShowFolder()}
+              title="Point webcue at the folder the show lives in, so its relative audio paths resolve"
+            >
+              {state.folderName ? `Folder: ${state.folderName}` : 'Show folder'}
+            </button>
+          )}
+
           <button
             type="button"
             disabled={state.show.cues.length === 0}
             onClick={() => audioInput.current?.click()}
           >
             Add audio
+          </button>
+
+          <span className="titlebar-divider" />
+
+          <button
+            type="button"
+            disabled={state.show.cues.length === 0}
+            onClick={() => void store.save()}
+          >
+            Save
+          </button>
+
+          <button
+            type="button"
+            disabled={state.show.cues.length === 0}
+            onClick={() => store.exportBundle()}
+            title="Download the show and its audio as one file"
+          >
+            Export bundle
           </button>
         </div>
 
@@ -138,7 +192,29 @@ export function App() {
             e.target.value = '';
           }}
         />
+
+        <input
+          ref={bundleInput}
+          type="file"
+          accept=".cueshowpack,application/zip"
+          hidden
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) void store.openBundle(file);
+            e.target.value = '';
+          }}
+        />
       </header>
+
+      {state.folderNeedsPermission && (
+        <div className="permission-strip">
+          <strong>{state.folderName}</strong> is remembered from last time, but a page has to ask
+          again before it can read your disk.
+          <button type="button" onClick={() => void store.grantRememberedFolder()}>
+            Reconnect folder
+          </button>
+        </div>
+      )}
 
       {!running && (
         <div className="start-strip">
@@ -180,12 +256,17 @@ export function App() {
         onMasterGain={(db) => store.setMasterGainDb(db)}
       />
 
-      {state.missingAudio.length > 0 && (
+      {state.missingAudio.length > 0 && !state.folderNeedsPermission && (
         <div className="warning-strip">
           {state.missingAudio.length} audio file
           {state.missingAudio.length === 1 ? '' : 's'} not loaded — those cues will not play.
+          {state.canPickFolder && (
+            <button type="button" onClick={() => void store.pickShowFolder()}>
+              Point at the show folder
+            </button>
+          )}
           <button type="button" onClick={() => audioInput.current?.click()}>
-            Add audio
+            Pick files
           </button>
         </div>
       )}

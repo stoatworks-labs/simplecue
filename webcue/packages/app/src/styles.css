@@ -813,3 +813,24 @@ tr.cue-row.selected td {
   background: rgba(157, 124, 255, 0.55);
   border-color: rgba(157, 124, 255, 0.7);
 }
+
+.titlebar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--line);
+}
+
+.permission-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(110, 168, 254, 0.12);
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.permission-strip strong {
+  font-weight: 600;
+}
