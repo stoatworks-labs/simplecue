@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>webcue engine self-test</title>
+<style>
+  body { font-family: ui-monospace, Menlo, monospace; background: #14161a; color: #e6e9ef; padding: 20px; font-size: 13px; }
+  .pass { color: #5ddb9a; } .fail { color: #ff6b6b; }
+  pre { white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>webcue engine self-test</h1>
+<pre id="out">running...</pre>
+
+<script type="module">
+// Exercises the parts that are actually platform-sensitive: instantiating the
+// WASM engine on this CPU, running an AudioWorklet on this OS audio backend,
+// and getting real sample movement out of CueVoice. The React UI is ordinary
+// DOM and is not what varies between platforms, so it is deliberately not here.
+//
+// Results are POSTed back to the little server that served this page, so the
+// run can be read from a terminal without anyone looking at the screen.
+
+const results = [];
+const out = document.getElementById('out');
+
+function check(name, ok, detail = '') {
+  results.push({ name, ok, detail });
+  out.textContent = results
+    .map((r) => `${r.ok ? 'PASS' : 'FAIL'}  ${r.name}${r.detail ? '  — ' + r.detail : ''}`)
+    .join('\n');
+}
+
+async function report(summary) {
+  try {
+    await fetch('/result', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ ...summary, results, ua: navigator.userAgent }),
+    });
+  } catch {
+    // The page still shows the result on screen if the POST fails.
+  }
+}
+
+function rampWav(seconds, rate) {
+  const frames = Math.round(seconds * rate);
+  const left = new Float32Array(frames);
+  const right = new Float32Array(frames);
+  for (let i = 0; i < frames; i++) {
+    const v = Math.sin((2 * Math.PI * 220 * i) / rate) * 0.3;
+    left[i] = v;
+    right[i] = v;
+  }
+  return { channels: [left, right], numFrames: frames, rate };
+}
+
+try {
+  const ctx = new AudioContext();
+
+  // resume() must NOT be awaited unguarded. WebKit leaves the promise pending
+  // forever when there has been no user gesture — it does not reject — so an
+  // unguarded await hangs the whole page and the run reports nothing at all.
+  // That is a real finding about Safari, not a quirk of this harness, and it is
+  // why the app starts its engine from a button rather than on load.
+  await Promise.race([
+    ctx.resume().catch(() => {}),
+    new Promise((r) => setTimeout(r, 2000)),
+  ]);
+
+  const gestureless = ctx.state !== 'running';
+  check('AudioContext running without a gesture', !gestureless,
+    `state=${ctx.state}, rate=${ctx.sampleRate}` +
+    (gestureless ? ' — this browser needs a click first, which the app does' : ''));
+
+  const wasmBytes = await (await fetch('webcue-engine.wasm')).arrayBuffer();
+  check('wasm fetched', wasmBytes.byteLength > 1000, `${wasmBytes.byteLength} bytes`);
+
+  await ctx.audioWorklet.addModule('webcue-processor.js');
+  check('worklet module loaded', true);
+
+  const node = new AudioWorkletNode(ctx, 'webcue-processor', {
+    numberOfInputs: 0,
+    numberOfOutputs: 1,
+    outputChannelCount: [2],
+    processorOptions: { wasmBytes, numOutputs: 2 },
+  });
+  node.connect(ctx.destination);
+
+  const snapshots = [];
+  let ready = null;
+  let sourceLoaded = false;
+  let engineError = null;
+
+  node.port.onmessage = (e) => {
+    const m = e.data;
+    if (m.type === 'ready') ready = m;
+    else if (m.type === 'sourceLoaded') sourceLoaded = true;
+    else if (m.type === 'snapshot') snapshots.push(m.voices);
+    else if (m.type === 'error') engineError = m.message;
+  };
+
+  const waitFor = async (fn, ms, label) => {
+    const start = performance.now();
+    while (performance.now() - start < ms) {
+      if (fn()) return true;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    check(label, false, `timed out after ${ms}ms`);
+    return false;
+  };
+
+  if (await waitFor(() => ready !== null, 5000, 'engine instantiated in worklet')) {
+    check('engine instantiated in worklet', true,
+      `${ready.numOutputs} out, ${ready.maxVoices} voices, block ${ready.blockSize}`);
+
+    const src = rampWav(3, ctx.sampleRate);
+    node.port.postMessage({ type: 'loadSource', index: 0, ...src },
+      src.channels.map((c) => c.buffer));
+
+    if (await waitFor(() => sourceLoaded, 5000, 'source accepted')) {
+      check('source accepted', true, `${src.numFrames} frames`);
+
+      node.port.postMessage({
+        type: 'start', slot: 0, generation: 1,
+        spec: {
+          sourceIndex: 0, regionStart: 0, regionEnd: src.numFrames, preWaitSamples: 0,
+          loopEnabled: false, loopCount: 0,
+          vampEnabled: false, vampStart: 0, vampEnd: 0, vampRelease: 0,
+          gain: 1, fadeInSamples: 0, fadeInShape: 1, fadeOutSamples: 0, fadeOutShape: 1,
+          routes: [{ source: 0, output: 0, gain: 1 }, { source: 1, output: 1, gain: 1 }],
+        },
+      });
+
+      // A suspended context renders nothing, by design. Asserting otherwise
+      // would turn a correct autoplay policy into a red failure, so the
+      // rendering checks are skipped and SAID to be skipped.
+      if (gestureless) {
+        check('voice rendering', true,
+          'skipped — the context is suspended until a click, so nothing renders yet');
+        check('audio thread kept running', true, 'skipped for the same reason');
+        throw { skipRendering: true };
+      }
+
+      // The engine only reports a voice as sounding once real blocks have been
+      // rendered, so this is proof the audio thread ran, not just that a
+      // message was accepted.
+      const sounded = await waitFor(
+        () => snapshots.some((s) => s.some((v) => v.slot === 0 && v.sounded > 0)),
+        6000, 'voice actually rendered audio',
+      );
+
+      if (sounded) {
+        const findSlot0 = () => {
+          for (let i = snapshots.length - 1; i >= 0; i--) {
+            const v = snapshots[i].find((s) => s.slot === 0);
+            if (v) return v;
+          }
+          return null;
+        };
+
+        const first = findSlot0();
+        check('voice actually rendered audio', true,
+          `sounded=${first.sounded} samples, position=${first.position}`);
+
+        // Let the audio thread run on, then confirm it kept going. This is the
+        // assertion that a stalled or starved worklet would fail — a single
+        // snapshot only proves it started.
+        await new Promise((r) => setTimeout(r, 600));
+
+        const later = findSlot0();
+        const advanced = later && later.sounded > first.sounded;
+        check('audio thread kept running', !!advanced,
+          advanced
+            ? `${first.sounded} -> ${later.sounded} samples`
+            : `stuck at ${first.sounded} samples`);
+      }
+    }
+  }
+
+  if (engineError) check('no engine errors', false, engineError);
+  else check('no engine errors', true);
+} catch (e) {
+  if (!(e && e.skipRendering)) {
+    check('unexpected exception', false, String(e && e.stack ? e.stack : e));
+  }
+}
+
+const failed = results.filter((r) => !r.ok).length;
+out.textContent += `\n\n${failed === 0 ? 'ALL PASSED' : failed + ' FAILED'}`;
+document.title = failed === 0 ? 'PASS' : 'FAIL';
+await report({ failed, total: results.length });
+</script>
+</body>
+</html>

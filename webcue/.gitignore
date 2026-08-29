@@ -6,3 +6,8 @@ node_modules/
 web/webcue-processor.js
 packages/app/src/engine/
 packages/app/dist/
+
+# Engine assets copied beside the cross-platform harness, and its run output.
+test-platform/webcue-engine.wasm
+test-platform/webcue-processor.js
+test-platform/results.json
