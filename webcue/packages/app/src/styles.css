@@ -100,7 +100,19 @@ button.vamp-ready {
 .app {
   display: flex;
   flex-direction: column;
+
+  /* 100vh is WRONG on iOS Safari: it is the viewport with the browser chrome
+     ignored, so the app ends up taller than what you can see and the whole
+     thing scrolls. Found on an iPad simulator, where the title bar and the file
+     buttons scrolled off the top and the status bar sat below the fold. On a
+     cue player that is not cosmetic — GO can leave the screen during a show.
+     100dvh is the visible viewport and tracks the chrome as it hides. */
   height: 100vh;
+  height: 100dvh;
+
+  /* No rubber-banding: dragging a waveform marker near the edge should not
+     bounce the page. */
+  overscroll-behavior: none;
 }
 
 .titlebar {
@@ -833,4 +845,56 @@ tr.cue-row.selected td {
 
 .permission-strip strong {
   font-weight: 600;
+}
+
+/* ---- narrow screens ---------------------------------------------------
+   Not an attempt to make webcue a phone app: running a show from a phone is
+   not a thing anyone should do, and the inspector needs width to be usable.
+   But a public page gets opened on phones out of curiosity, and the fixed
+   290px running panel left the cue list about 270px wide on a 411px screen —
+   which reads as broken rather than as "wrong tool". Below 800px the panel
+   goes underneath instead of beside, and the toolbars wrap rather than
+   overflowing off the right edge. */
+@media (max-width: 800px) {
+  .body {
+    flex-direction: column;
+  }
+
+  .active-panel {
+    width: auto;
+    border-left: none;
+    border-top: 1px solid var(--line);
+    max-height: 40vh;
+  }
+
+  .titlebar,
+  .titlebar-actions,
+  .transport,
+  .list-toolbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  /* The divider is a vertical rule between two groups of buttons; once they
+     wrap it lands in the middle of a row and reads as a stray mark. */
+  .titlebar-divider {
+    display: none;
+  }
+
+  .show-name {
+    flex-basis: 100%;
+  }
+
+  .standby-readout {
+    flex-basis: 100%;
+    order: 10;
+  }
+
+  .master {
+    flex-basis: 100%;
+  }
+
+  .master input[type='range'] {
+    flex: 1;
+  }
 }

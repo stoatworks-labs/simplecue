@@ -4,13 +4,25 @@
 <meta charset="utf-8">
 <title>webcue engine self-test</title>
 <style>
-  body { font-family: ui-monospace, Menlo, monospace; background: #14161a; color: #e6e9ef; padding: 20px; font-size: 13px; }
+  body { font-family: ui-monospace, Menlo, monospace; background: #14161a; color: #e6e9ef; padding: 20px; font-size: 15px; }
   .pass { color: #5ddb9a; } .fail { color: #ff6b6b; }
   pre { white-space: pre-wrap; }
+  #tap {
+    display: none; font: inherit; font-size: 20px; font-weight: 700;
+    background: #5ddb9a; color: #10131a; border: 0; border-radius: 10px;
+    padding: 22px 34px; margin: 18px 0; cursor: pointer;
+  }
 </style>
 </head>
 <body>
 <h1>webcue engine self-test</h1>
+
+<!-- Every engine but Chromium refuses to start an AudioContext without a
+     gesture, so on those this button is the gesture. It is also what makes this
+     harness usable by hand on a phone, a tablet, or a Safari nobody has enabled
+     remote automation on. -->
+<button id="tap">Tap to run the audio test</button>
+
 <pre id="out">running...</pre>
 
 <script type="module">
@@ -133,14 +145,32 @@ try {
         },
       });
 
-      // A suspended context renders nothing, by design. Asserting otherwise
-      // would turn a correct autoplay policy into a red failure, so the
-      // rendering checks are skipped and SAID to be skipped.
-      if (gestureless) {
-        check('voice rendering', true,
-          'skipped — the context is suspended until a click, so nothing renders yet');
-        check('audio thread kept running', true, 'skipped for the same reason');
-        throw { skipRendering: true };
+      // A suspended context renders nothing, by design. Rather than calling
+      // that a failure, ask for the gesture the platform is waiting for.
+      if (ctx.state !== 'running') {
+        const button = document.getElementById('tap');
+        button.style.display = 'block';
+
+        const tapped = await new Promise((resolve) => {
+          button.addEventListener('click', async () => {
+            await ctx.resume().catch(() => {});
+            resolve(ctx.state === 'running');
+          }, { once: true });
+
+          // Unattended runs (headless, CI) carry on and report honestly.
+          setTimeout(() => resolve(false), 25_000);
+        });
+
+        button.style.display = 'none';
+
+        if (!tapped) {
+          check('voice rendering', true,
+            'skipped — nobody tapped, so the context stayed suspended');
+          check('audio thread kept running', true, 'skipped for the same reason');
+          throw { skipRendering: true };
+        }
+
+        check('AudioContext resumed by a tap', true, `state=${ctx.state}`);
       }
 
       // The engine only reports a voice as sounding once real blocks have been

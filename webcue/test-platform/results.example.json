@@ -1,104 +1,13 @@
 [
   {
-    "at": "2026-08-29T00:26:30.971Z",
-    "failed": 0,
-    "total": 8,
-    "results": [
-      {
-        "name": "AudioContext running",
-        "ok": true,
-        "detail": "state=running, rate=48000"
-      },
-      {
-        "name": "wasm fetched",
-        "ok": true,
-        "detail": "72712 bytes"
-      },
-      {
-        "name": "worklet module loaded",
-        "ok": true,
-        "detail": ""
-      },
-      {
-        "name": "engine instantiated in worklet",
-        "ok": true,
-        "detail": "2 out, 32 voices, block 128"
-      },
-      {
-        "name": "source accepted",
-        "ok": true,
-        "detail": "144000 frames"
-      },
-      {
-        "name": "voice actually rendered audio",
-        "ok": true,
-        "detail": "sounded=1536 samples, position=1536"
-      },
-      {
-        "name": "audio thread kept running",
-        "ok": true,
-        "detail": "1536 -> 30208 samples"
-      },
-      {
-        "name": "no engine errors",
-        "ok": true,
-        "detail": ""
-      }
-    ],
-    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Claude/1.40609.0 Chrome/148.0.7778.280 Safari/537.36"
-  },
-  {
-    "at": "2026-08-29T00:28:26.715Z",
+    "at": "2026-08-29T00:52:08.387Z",
     "failed": 1,
-    "total": 7,
+    "total": 9,
     "results": [
       {
         "name": "AudioContext running without a gesture",
         "ok": false,
-        "detail": "state=suspended, rate=44100 — this browser needs a click first, which the app does"
-      },
-      {
-        "name": "wasm fetched",
-        "ok": true,
-        "detail": "72712 bytes"
-      },
-      {
-        "name": "worklet module loaded",
-        "ok": true,
-        "detail": ""
-      },
-      {
-        "name": "engine instantiated in worklet",
-        "ok": true,
-        "detail": "2 out, 32 voices, block 128"
-      },
-      {
-        "name": "source accepted",
-        "ok": true,
-        "detail": "132300 frames"
-      },
-      {
-        "name": "voice rendering",
-        "ok": true,
-        "detail": "skipped — the context is suspended until a click, so nothing renders yet"
-      },
-      {
-        "name": "audio thread kept running",
-        "ok": true,
-        "detail": "skipped for the same reason"
-      }
-    ],
-    "ua": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/60.5 Safari/605.1.15"
-  },
-  {
-    "at": "2026-08-29T00:29:53.243Z",
-    "failed": 0,
-    "total": 8,
-    "results": [
-      {
-        "name": "AudioContext running without a gesture",
-        "ok": true,
-        "detail": "state=running, rate=48000"
+        "detail": "state=suspended, rate=48000 — this browser needs a click first, which the app does"
       },
       {
         "name": "wasm fetched",
@@ -121,148 +30,9 @@
         "detail": "144000 frames"
       },
       {
-        "name": "voice actually rendered audio",
+        "name": "AudioContext resumed by a tap",
         "ok": true,
-        "detail": "sounded=1536 samples, position=1536"
-      },
-      {
-        "name": "audio thread kept running",
-        "ok": true,
-        "detail": "1536 -> 30208 samples"
-      },
-      {
-        "name": "no engine errors",
-        "ok": true,
-        "detail": ""
-      }
-    ],
-    "ua": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36"
-  },
-  {
-    "at": "2026-08-29T00:30:39.413Z",
-    "failed": 0,
-    "total": 8,
-    "results": [
-      {
-        "name": "AudioContext running without a gesture",
-        "ok": true,
-        "detail": "state=running, rate=48000"
-      },
-      {
-        "name": "wasm fetched",
-        "ok": true,
-        "detail": "72712 bytes"
-      },
-      {
-        "name": "worklet module loaded",
-        "ok": true,
-        "detail": ""
-      },
-      {
-        "name": "engine instantiated in worklet",
-        "ok": true,
-        "detail": "2 out, 32 voices, block 128"
-      },
-      {
-        "name": "source accepted",
-        "ok": true,
-        "detail": "144000 frames"
-      },
-      {
-        "name": "voice actually rendered audio",
-        "ok": true,
-        "detail": "sounded=1024 samples, position=1024"
-      },
-      {
-        "name": "audio thread kept running",
-        "ok": true,
-        "detail": "1024 -> 29696 samples"
-      },
-      {
-        "name": "no engine errors",
-        "ok": true,
-        "detail": ""
-      }
-    ],
-    "ua": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:154.0) Gecko/20100101 Firefox/154.0"
-  },
-  {
-    "at": "2026-08-29T00:30:39.664Z",
-    "failed": 0,
-    "total": 8,
-    "results": [
-      {
-        "name": "AudioContext running without a gesture",
-        "ok": true,
-        "detail": "state=running, rate=48000"
-      },
-      {
-        "name": "wasm fetched",
-        "ok": true,
-        "detail": "72712 bytes"
-      },
-      {
-        "name": "worklet module loaded",
-        "ok": true,
-        "detail": ""
-      },
-      {
-        "name": "engine instantiated in worklet",
-        "ok": true,
-        "detail": "2 out, 32 voices, block 128"
-      },
-      {
-        "name": "source accepted",
-        "ok": true,
-        "detail": "144000 frames"
-      },
-      {
-        "name": "voice actually rendered audio",
-        "ok": true,
-        "detail": "sounded=2048 samples, position=2048"
-      },
-      {
-        "name": "audio thread kept running",
-        "ok": true,
-        "detail": "2048 -> 30720 samples"
-      },
-      {
-        "name": "no engine errors",
-        "ok": true,
-        "detail": ""
-      }
-    ],
-    "ua": "Mozilla/5.0 (X11; Ubuntu; Linux x86_64; rv:154.0) Gecko/20100101 Firefox/154.0"
-  },
-  {
-    "at": "2026-08-29T00:31:44.726Z",
-    "failed": 0,
-    "total": 8,
-    "results": [
-      {
-        "name": "AudioContext running without a gesture",
-        "ok": true,
-        "detail": "state=running, rate=44100"
-      },
-      {
-        "name": "wasm fetched",
-        "ok": true,
-        "detail": "72712 bytes"
-      },
-      {
-        "name": "worklet module loaded",
-        "ok": true,
-        "detail": ""
-      },
-      {
-        "name": "engine instantiated in worklet",
-        "ok": true,
-        "detail": "2 out, 32 voices, block 128"
-      },
-      {
-        "name": "source accepted",
-        "ok": true,
-        "detail": "132300 frames"
+        "detail": "state=running"
       },
       {
         "name": "voice actually rendered audio",
@@ -272,7 +42,7 @@
       {
         "name": "audio thread kept running",
         "ok": true,
-        "detail": "4096 -> 30720 samples"
+        "detail": "4096 -> 32768 samples"
       },
       {
         "name": "no engine errors",
@@ -280,12 +50,12 @@
         "detail": ""
       }
     ],
-    "ua": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/151.0.0.0 Safari/537.36 Edg/151.0.0.0"
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Safari/605.1.15"
   },
   {
-    "at": "2026-08-29T00:40:47.781Z",
+    "at": "2026-08-29T00:52:35.376Z",
     "failed": 1,
-    "total": 7,
+    "total": 9,
     "results": [
       {
         "name": "AudioContext running without a gesture",
@@ -313,22 +83,32 @@
         "detail": "144000 frames"
       },
       {
-        "name": "voice rendering",
+        "name": "AudioContext resumed by a tap",
         "ok": true,
-        "detail": "skipped — the context is suspended until a click, so nothing renders yet"
+        "detail": "state=running"
+      },
+      {
+        "name": "voice actually rendered audio",
+        "ok": true,
+        "detail": "sounded=4096 samples, position=4096"
       },
       {
         "name": "audio thread kept running",
         "ok": true,
-        "detail": "skipped for the same reason"
+        "detail": "4096 -> 32768 samples"
+      },
+      {
+        "name": "no engine errors",
+        "ok": true,
+        "detail": ""
       }
     ],
-    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.4 Safari/605.1.15"
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Safari/605.1.15"
   },
   {
-    "at": "2026-08-29T00:41:01.420Z",
+    "at": "2026-08-29T00:57:25.383Z",
     "failed": 1,
-    "total": 7,
+    "total": 9,
     "results": [
       {
         "name": "AudioContext running without a gesture",
@@ -356,16 +136,26 @@
         "detail": "144000 frames"
       },
       {
-        "name": "voice rendering",
+        "name": "AudioContext resumed by a tap",
         "ok": true,
-        "detail": "skipped — the context is suspended until a click, so nothing renders yet"
+        "detail": "state=running"
+      },
+      {
+        "name": "voice actually rendered audio",
+        "ok": true,
+        "detail": "sounded=12288 samples, position=12288"
       },
       {
         "name": "audio thread kept running",
         "ok": true,
-        "detail": "skipped for the same reason"
+        "detail": "12288 -> 43008 samples"
+      },
+      {
+        "name": "no engine errors",
+        "ok": true,
+        "detail": ""
       }
     ],
-    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/26.4 Safari/605.1.15"
+    "ua": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
   }
 ]
