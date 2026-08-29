@@ -1,0 +1,33 @@
+# Cloudflare Worker config — static assets only.
+#
+# webcue is a fully static SPA: the show and the audio a user opens never leave
+# the browser, and there is no backend to send them to. It is deployed as a
+# WORKER rather than a Pages project because that is what the rest of the fleet
+# uses (simpleVIS, stagewash, pixel-peeker, blend-calc, aspect-calc, test-card
+# and arraycad are all this shape).
+#
+# `[assets] directory` is the Worker form. The Pages form is
+# `pages_build_output_dir`, and the two are NOT interchangeable — a repo
+# carrying the Pages key fails a Worker build with "Could not detect a directory
+# containing static files", which reads like a missing build rather than the
+# wrong key.
+#
+# There is deliberately no `_redirects`: the Pages way to route an SPA is a
+# `/*  /index.html  200` line, and the assets runtime rejects it as an infinite
+# loop and fails the whole deploy. `not_found_handling` is the Worker
+# equivalent.
+#
+# NOTE: wrangler runs no build. `npm run build --workspace=@webcue/app` first,
+# or you will deploy whatever happens to be in dist/ — including nothing.
+name = "webcue"
+compatibility_date = "2026-08-29"
+
+# `custom_domain = true` makes Cloudflare create and manage the DNS record
+# itself. Adding a proxied CNAME by hand as well conflicts with it.
+[[routes]]
+pattern = "webcue.stoatworks-labs.com"
+custom_domain = true
+
+[assets]
+directory = "./packages/app/dist"
+not_found_handling = "single-page-application"
