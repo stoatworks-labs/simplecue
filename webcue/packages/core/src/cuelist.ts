@@ -105,6 +105,25 @@ export function clampStandby(cues: readonly Cue[], standby: Standby): Standby {
   return standbyPosition(cues, standby.index, standby.step);
 }
 
+/** The number a newly added cue gets: one past the highest whole number in the
+    list. CueList.cpp:130-138.
+
+    It uses the INTEGER value of each number, which is why a list of "1", "2.5"
+    and "PRE" suggests "3" rather than "3.5" or a failure — juce::String's
+    getIntValue() reads the leading digits and gives 0 for text. Cue numbers are
+    free text on purpose, so this only ever has to be a sensible guess. */
+export function suggestNextNumber(cues: readonly Cue[]): string {
+  let highest = 0;
+
+  for (const cue of cues) {
+    // parseInt semantics match getIntValue(): leading digits, else 0.
+    const value = Number.parseInt(cue.number, 10);
+    if (Number.isFinite(value) && value > highest) highest = value;
+  }
+
+  return String(highest + 1);
+}
+
 /** The cue a link points at: the explicit target when set, otherwise simply the
     next cue in the list. CueList.cpp:229-240.
 

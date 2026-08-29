@@ -83,6 +83,49 @@ export function App() {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [anythingPlaying]);
 
+  // Drag events fire on every element the pointer crosses, so a naive
+  // enter/leave pair flickers the overlay as the cursor moves over children.
+  // Counting enters and leaves is the standard fix.
+  const dragDepth = useRef(0);
+  const [dragging, setDragging] = useState(false);
+
+  const onDragEnter = useCallback((e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    e.preventDefault();
+    dragDepth.current += 1;
+    setDragging(true);
+  }, []);
+
+  const onDragLeave = useCallback((e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    dragDepth.current -= 1;
+    if (dragDepth.current <= 0) {
+      dragDepth.current = 0;
+      setDragging(false);
+    }
+  }, []);
+
+  const onDragOver = useCallback((e: React.DragEvent) => {
+    if (!e.dataTransfer.types.includes('Files')) return;
+    // Without preventDefault the browser navigates to the dropped file, which
+    // throws away the show.
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const onDrop = useCallback(
+    (e: React.DragEvent) => {
+      if (!e.dataTransfer.types.includes('Files')) return;
+      e.preventDefault();
+      dragDepth.current = 0;
+      setDragging(false);
+
+      const files = Array.from(e.dataTransfer.files);
+      if (files.length > 0) void store.handleDroppedFiles(files);
+    },
+    [store],
+  );
+
   const onToggleExpand = useCallback((cueId: string) => {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -99,7 +142,13 @@ export function App() {
   const onReleaseVamp = useCallback((info: ActiveCueInfo) => store.releaseVampVoice(info), [store]);
 
   return (
-    <div className="app">
+    <div
+      className="app"
+      onDragEnter={onDragEnter}
+      onDragLeave={onDragLeave}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+    >
       <header className="titlebar">
         <h1>
           webcue <span className="dim">{__APP_VERSION__}</span>
@@ -291,6 +340,8 @@ export function App() {
             >
               Move down
             </button>
+
+            <span className="dim toolbar-hint">or drop audio files anywhere</span>
           </div>
 
           <CueList
@@ -330,6 +381,18 @@ export function App() {
         </span>
         <span className="log mono dim">{state.log[state.log.length - 1] ?? ''}</span>
       </footer>
+
+      {dragging && (
+        <div className="drop-overlay">
+          <div className="drop-card">
+            <strong>Drop to add cues</strong>
+            <span className="dim">
+              One cue per audio file, in the order you dragged them. A{' '}
+              <code>.cueshow</code> or <code>.cueshowpack</code> opens instead.
+            </span>
+          </div>
+        </div>
+      )}
 
       {state.foldPromptOpen && (
         <FoldPrompt

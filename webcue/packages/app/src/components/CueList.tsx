@@ -105,7 +105,8 @@ export function CueList(props: Props) {
   if (cues.length === 0) {
     return (
       <div className="empty-list">
-        No cues. Open a <code>.cueshow</code> to load a show.
+        No cues. Drop audio files here to make some, or open a <code>.cueshow</code> to load a
+        show.
       </div>
     );
   }

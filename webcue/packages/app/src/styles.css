@@ -898,3 +898,51 @@ tr.cue-row.selected td {
     flex: 1;
   }
 }
+
+/* ---- drag and drop ----------------------------------------------------- */
+
+.toolbar-hint {
+  font-size: 11px;
+  align-self: center;
+}
+
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 22, 26, 0.75);
+  border: 3px dashed var(--live);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  /* The overlay must not eat the drop it is advertising. */
+  pointer-events: none;
+}
+
+.drop-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 26px 34px;
+  max-width: 420px;
+}
+
+.drop-card strong {
+  font-size: 18px;
+  color: var(--live);
+}
+
+.drop-card span {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.drop-card code {
+  background: var(--panel-2);
+  padding: 1px 5px;
+  border-radius: 4px;
+}

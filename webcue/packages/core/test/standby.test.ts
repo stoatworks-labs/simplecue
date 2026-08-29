@@ -8,7 +8,13 @@
 import { describe, expect, it } from 'vitest';
 
 import { makeCue } from '../src/cue.js';
-import { advanceStandby, clampStandby, resolveLinkTarget, standbyForCue } from '../src/cuelist.js';
+import {
+  advanceStandby,
+  clampStandby,
+  resolveLinkTarget,
+  standbyForCue,
+  suggestNextNumber,
+} from '../src/cuelist.js';
 import { cueHeaderStep } from '../src/cuestep.js';
 
 const plain = (n: string) => makeCue({ number: n, fileDuration: 10, endTime: 10 });
@@ -139,5 +145,31 @@ describe('resolveLinkTarget — CueList.cpp:229-240', () => {
 
   it('resolves to nothing past the end of the list', () => {
     expect(resolveLinkTarget([plain('1')], 0)).toBeNull();
+  });
+});
+
+describe('suggestNextNumber — CueList.cpp:130-138', () => {
+  it('is one past the highest whole number', () => {
+    expect(suggestNextNumber([plain('1'), plain('2'), plain('3')])).toBe('4');
+  });
+
+  it('starts at 1 for an empty list', () => {
+    expect(suggestNextNumber([])).toBe('1');
+  });
+
+  it('reads the leading digits of a decimal cue number', () => {
+    // "12.5" counts as 12, matching juce::String::getIntValue(), so the next
+    // suggestion is 13 rather than 13.5. Cue numbers are free text, so this
+    // only ever has to be a sensible guess.
+    expect(suggestNextNumber([plain('12'), plain('12.5')])).toBe('13');
+  });
+
+  it('ignores cue numbers that are not numbers at all', () => {
+    expect(suggestNextNumber([plain('PRE'), plain('INTERVAL')])).toBe('1');
+    expect(suggestNextNumber([plain('PRE'), plain('7')])).toBe('8');
+  });
+
+  it('does not assume the list is in order', () => {
+    expect(suggestNextNumber([plain('9'), plain('2'), plain('4')])).toBe('10');
   });
 });

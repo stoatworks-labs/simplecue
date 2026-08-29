@@ -16,6 +16,7 @@ import {
   parseShow,
   serialiseShow,
   standbyForCue,
+  suggestNextNumber,
 } from '@webcue/core';
 import type { WebCueEngine } from '@webcue/engine';
 
@@ -590,6 +591,90 @@ export class AppStore {
     return this.engine?.getPeaks(audioFile) ?? null;
   }
 
+  /** Files dropped on the window.
+
+      Follows MainComponent::filesDropped (MainComponent.cpp:1029-1050): a show
+      file wins outright and nothing else in the drop is looked at, and audio
+      files each become a cue IN DROP ORDER — deliberately not sorted, because
+      the order the operator dragged them is the order they meant. */
+  async handleDroppedFiles(files: File[]): Promise<void> {
+    const show = files.find((f) => /\.cueshow$/i.test(f.name));
+    if (show) {
+      await this.openShow(show);
+      return;
+    }
+
+    const bundle = files.find((f) => /\.cueshowpack$/i.test(f.name));
+    if (bundle) {
+      await this.openBundle(bundle);
+      return;
+    }
+
+    const audio = files.filter(isAudioFile);
+
+    if (audio.length === 0) {
+      this.say('nothing droppable there — audio files, a .cueshow or a .cueshowpack');
+      return;
+    }
+
+    await this.addCuesFromFiles(audio);
+  }
+
+  /** One cue per file, appended after the selection, audio loaded as it goes. */
+  async addCuesFromFiles(files: File[]): Promise<void> {
+    if (!this.engine) {
+      this.say('start the audio engine before adding cues');
+      return;
+    }
+
+    let cues = [...this.snapshot.show.cues];
+    let at = this.snapshot.selectedIndex >= 0 ? this.snapshot.selectedIndex + 1 : cues.length;
+    let added = 0;
+    const defaults = this.snapshot.show;
+
+    for (const file of files) {
+      const path = file.name;
+
+      if (!(await this.loadAudioBytes(path, await file.arrayBuffer())) && !this.engine.hasSource(path)) {
+        continue;
+      }
+
+      const peaks = this.engine.getPeaks(path);
+      const info = this.engine.get(path);
+
+      const cue = makeCue({
+        number: suggestNextNumber(cues),
+        // The filename without its extension, which is what an operator called
+        // the file and so usually what they would have called the cue.
+        name: path.replace(/\.[^./\\]+$/, ''),
+        audioFile: path,
+        fileDuration: peaks ? peaks.numFrames / peaks.sampleRate : 0,
+        fileChannels: info?.numChannels ?? 2,
+        fileSampleRate: peaks?.sampleRate ?? 48000,
+        // The show's default fades, as Show::applyDefaultsTo does.
+        fadeInTime: defaults.defaultFadeInTime,
+        fadeOutTime: defaults.defaultFadeOutTime,
+        fadeInShape: defaults.defaultFadeShape,
+        fadeOutShape: defaults.defaultFadeShape,
+      });
+
+      cues = [...cues.slice(0, at), cue, ...cues.slice(at)];
+      at++;
+      added++;
+    }
+
+    if (added === 0) return;
+
+    this.setCues(cues, true);
+    this.set({ selectedIndex: at - 1 });
+
+    // A first cue should end up on standby, so GO does something straight away.
+    if (this.snapshot.standby.index < 0) this.setStandby(standbyForCue(cues, 0));
+
+    this.updateMissing();
+    this.say(`added ${added} cue${added === 1 ? '' : 's'}`);
+  }
+
   /** Attaches a picked file to a cue that had none, or replaces its audio. */
   async setCueAudio(cueId: string, file: File): Promise<void> {
     if (!this.engine) return;
@@ -670,6 +755,18 @@ export class AppStore {
   isAnythingVamping(): boolean {
     return this.snapshot.active.some((a) => a.vamping);
   }
+}
+
+/** Audio by MIME type where the browser supplies one, by extension otherwise.
+
+    The extension list is not decoration: a dragged .aif or .wav frequently
+    arrives with an empty `type`, and dropping a file that then silently does
+    nothing is worse than dropping one that is refused with a reason. */
+const audioExtensions =
+  /\.(wav|wave|aif|aiff|aifc|mp3|m4a|aac|flac|ogg|oga|opus|caf|wma)$/i;
+
+export function isAudioFile(file: File): boolean {
+  return file.type.startsWith('audio/') || audioExtensions.test(file.name);
 }
 
 function basename(path: string): string {
