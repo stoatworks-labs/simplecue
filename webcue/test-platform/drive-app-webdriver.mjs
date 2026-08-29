@@ -71,20 +71,56 @@ const exec = (script, args = []) => call('POST', at('/execute/sync'), { script, 
 const execAsync = (script, args = []) =>
   call('POST', at('/execute/async'), { script, args });
 
-async function clickButton(text) {
-  const el = await exec(
-    `return [...document.querySelectorAll('button')]
-       .find((b) => b.textContent.trim().startsWith(arguments[0])) || null;`,
-    [text],
-  );
+/** Waits for a button to exist AND be enabled before clicking it.
 
-  if (!el || !el[ELEMENT_KEY]) throw new Error(`no button starting with "${text}"`);
+    Clicking a disabled button is silent in WebDriver: no error, no event, and
+    the test then fails somewhere unrelated. GO is disabled until the show has
+    loaded and standby has a cue, so clicking it the instant the file input
+    settles is a race — one that Safari lost and Chromium happened to win. */
+async function clickButton(text, timeoutMs = 8000) {
+  const started = Date.now();
 
-  // A real WebDriver click, which the autoplay policy accepts as a gesture.
-  await call('POST', at(`/element/${el[ELEMENT_KEY]}/click`), {});
+  for (;;) {
+    const el = await exec(
+      `const b = [...document.querySelectorAll('button')]
+         .find((x) => x.textContent.trim().startsWith(arguments[0]));
+       return b && !b.disabled ? b : null;`,
+      [text],
+    );
+
+    if (el && el[ELEMENT_KEY]) {
+      // A real WebDriver click, which the autoplay policy accepts as a gesture.
+      await call('POST', at(`/element/${el[ELEMENT_KEY]}/click`), {});
+      return;
+    }
+
+    if (Date.now() - started > timeoutMs) {
+      throw new Error(`button "${text}" never became enabled`);
+    }
+
+    await sleep(200);
+  }
 }
 
 await call('POST', at('/timeouts'), { script: 30000 });
+
+// Size the window like a laptop. Safari's automation window opens small enough
+// to trip webcue's narrow layout, which is not what a desktop user sees — and
+// testing the phone layout by accident tells you nothing about either.
+try {
+  await call('POST', at('/window/rect'), { x: 40, y: 40, width: 1440, height: 900 });
+} catch {
+  // Not fatal; some drivers refuse to move a window.
+}
+
+// Bring it to the front. A background window can drop synthetic input in
+// Safari, which is the other candidate for a click that lands nowhere.
+try {
+  await call('POST', at('/window/maximize'), {});
+} catch {
+  // Equally optional.
+}
+
 await call('POST', at('/url'), { url: appUrl });
 await sleep(2500);
 
@@ -94,12 +130,28 @@ check('app loaded', title === 'webcue', `title=${title}`);
 const version = await exec("return document.querySelector('.titlebar h1')?.textContent?.trim();");
 check('app rendered', !!version, version ?? 'no titlebar');
 
-await clickButton('Start audio');
-await sleep(2500);
+/** Clicks, then waits for the click to have DONE something, retrying if not.
 
-const started = await exec("return !document.querySelector('.start-strip');");
+    Safari's automation window does not always have focus when it is first
+    driven, and a click into an unfocused window can be dropped silently. That
+    is indistinguishable from a click that landed on a button which did nothing,
+    so the only reliable test is the effect, not the click. */
+async function clickUntil(text, conditionScript, attempts = 4) {
+  for (let i = 0; i < attempts; i++) {
+    await clickButton(text);
+
+    for (let waited = 0; waited < 3000; waited += 250) {
+      await sleep(250);
+      if (await exec(`return ${conditionScript};`)) return true;
+    }
+  }
+
+  return false;
+}
+
+const started = await clickUntil('Start audio', "!document.querySelector('.start-strip')");
 const ctxNote = await exec("return document.querySelector('.statusbar span')?.textContent?.trim();");
-check('engine started from a click', started === true, ctxNote ?? '');
+check('engine started from a click', started, ctxNote ?? '');
 
 const setup = await execAsync(`
   const done = arguments[arguments.length - 1];
@@ -138,7 +190,7 @@ const setup = await execAsync(`
   }, o);
 
   const cues = [
-    cue({ number: '1', name: 'Opening', audioFile: 'one.wav', fileDuration: 6, endTime: 6, fadeInTime: 1 }),
+    cue({ number: '1', name: 'Opening', audioFile: 'one.wav', fileDuration: 14, endTime: 14, fadeInTime: 1 }),
     cue({ number: '2', name: 'Scene change', audioFile: 'two.wav', fileDuration: 8, endTime: 8,
           vampEnabled: true, vampStart: 2, vampEnd: 4 }),
   ];
@@ -158,7 +210,7 @@ const setup = await execAsync(`
 
   setTimeout(() => {
     feed(inputs[1], [
-      new File([wav(6, 220, rate)], 'one.wav', { type: 'audio/wav' }),
+      new File([wav(14, 220, rate)], 'one.wav', { type: 'audio/wav' }),
       new File([wav(8, 330, rate)], 'two.wav', { type: 'audio/wav' }),
     ]);
 
@@ -172,7 +224,7 @@ const setup = await execAsync(`
 check('show opened', setup.cues === 2, `${setup.cues} cue rows`);
 check('audio loaded', setup.missing === null, setup.missing ?? 'all present');
 
-await clickButton('GO');
+await clickUntil('GO', "document.querySelectorAll('.active-row').length > 0");
 await sleep(1400);
 
 const afterGo = await exec(`
@@ -189,7 +241,12 @@ check('standby advanced past Play', /Fade\/Stop/.test(afterGo.standby ?? ''), af
 
 await sleep(1600);
 const later = await exec("return document.querySelector('.active-times')?.textContent?.trim() ?? '';");
-check('play head advanced', later !== afterGo.elapsed, `${afterGo.elapsed} -> ${later}`);
+
+// Must still be RUNNING and showing a different time. An empty string would
+// mean the row vanished, which happens when the cue ends -- and would also
+// happen if the app fell over, so it must not count as progress.
+check('play head advanced', later !== '' && later !== afterGo.elapsed,
+  `${afterGo.elapsed} -> ${later || '(row gone)'}`);
 
 await exec(`
   [...document.querySelectorAll('tr.cue-row')]

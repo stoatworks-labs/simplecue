@@ -83,19 +83,37 @@ class Session {
     }
   }
 
-  async clickText(text) {
-    const box = await this.evaluate(`
-      (() => {
-        const el = [...document.querySelectorAll('button')]
-          .find((b) => b.textContent.trim().startsWith(${JSON.stringify(text)}));
-        if (!el) return null;
-        const r = el.getBoundingClientRect();
-        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-      })()
-    `);
+  /** Waits for the button to exist AND be enabled, then clicks its centre.
 
-    if (!box) throw new Error(`no button starting with ${JSON.stringify(text)}`);
-    await this.clickAt(box.x, box.y);
+      Clicking a disabled button does nothing and reports nothing, so the test
+      would fail somewhere unrelated. GO is disabled until the show has loaded
+      and standby has a cue — clicking it the instant the file input settles is
+      a race, and Safari lost it where Chromium happened to win. */
+  async clickText(text, timeoutMs = 8000) {
+    const started = Date.now();
+
+    for (;;) {
+      const box = await this.evaluate(`
+        (() => {
+          const el = [...document.querySelectorAll('button')]
+            .find((b) => b.textContent.trim().startsWith(${JSON.stringify(text)}));
+          if (!el || el.disabled) return null;
+          const r = el.getBoundingClientRect();
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        })()
+      `);
+
+      if (box) {
+        await this.clickAt(box.x, box.y);
+        return;
+      }
+
+      if (Date.now() - started > timeoutMs) {
+        throw new Error(`button ${JSON.stringify(text)} never became enabled`);
+      }
+
+      await sleep(200);
+    }
   }
 }
 
@@ -171,7 +189,7 @@ const setup = await s.evaluate(`
     }, o);
 
     const cues = [
-      cue({ number: '1', name: 'Opening', audioFile: 'one.wav', fileDuration: 6, endTime: 6, fadeInTime: 1 }),
+      cue({ number: '1', name: 'Opening', audioFile: 'one.wav', fileDuration: 14, endTime: 14, fadeInTime: 1 }),
       cue({ number: '2', name: 'Scene change', audioFile: 'two.wav', fileDuration: 8, endTime: 8,
             vampEnabled: true, vampStart: 2, vampEnd: 4 }),
     ];
@@ -190,7 +208,7 @@ const setup = await s.evaluate(`
     feed(inputs[0], [new File([JSON.stringify(show)], 'Platform test.cueshow', { type: 'application/json' })]);
     await new Promise((r) => setTimeout(r, 500));
     feed(inputs[1], [
-      new File([wav(6, 220, rate)], 'one.wav', { type: 'audio/wav' }),
+      new File([wav(14, 220, rate)], 'one.wav', { type: 'audio/wav' }),
       new File([wav(8, 330, rate)], 'two.wav', { type: 'audio/wav' }),
     ]);
     await new Promise((r) => setTimeout(r, 1500));
@@ -225,7 +243,12 @@ check('standby advanced past Play', /Fade\/Stop/.test(afterGo.standby ?? ''), af
 // is running on this machine, through the whole app rather than a test page.
 await sleep(1500);
 const later = await s.evaluate("document.querySelector('.active-times')?.textContent?.trim() ?? ''");
-check('play head advanced', later !== afterGo.elapsed, `${afterGo.elapsed} -> ${later}`);
+
+// Must still be RUNNING and showing a different time. An empty string would
+// mean the row vanished, which happens when the cue ends -- and would also
+// happen if the app fell over, so it must not count as progress.
+check('play head advanced', later !== '' && later !== afterGo.elapsed,
+  `${afterGo.elapsed} -> ${later || '(row gone)'}`);
 
 // The vamp: fire cue 2 and confirm it holds.
 await s.evaluate(`
