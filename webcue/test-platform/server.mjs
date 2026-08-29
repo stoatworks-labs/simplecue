@@ -11,17 +11,26 @@
 
 import { createServer } from 'node:http';
 import { readFile, writeFile } from 'node:fs/promises';
-import { dirname, extname, join, normalize } from 'node:path';
+import { dirname, extname, join, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const root = dirname(fileURLToPath(import.meta.url));
+const here = dirname(fileURLToPath(import.meta.url));
+
+// Usage: server.mjs [port] [rootDir]
+// The default root is this directory (the engine self-test). Pass the app's
+// dist to serve the whole application instead.
 const port = Number(process.argv[2] ?? 8123);
+const root = process.argv[3] ? resolve(process.argv[3]) : here;
 const collected = [];
 
 const types = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
+  '.mjs': 'text/javascript; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
   '.wasm': 'application/wasm',
+  '.svg': 'image/svg+xml',
 };
 
 const server = createServer(async (req, res) => {
@@ -39,7 +48,7 @@ const server = createServer(async (req, res) => {
     console.log(`----- ${body.failed} failed of ${body.total} -----`);
 
     collected.push({ at: new Date().toISOString(), ...body });
-    await writeFile(join(root, 'results.json'), JSON.stringify(collected, null, 2));
+    await writeFile(join(here, 'results.json'), JSON.stringify(collected, null, 2));
 
     res.writeHead(204).end();
     return;
@@ -48,7 +57,7 @@ const server = createServer(async (req, res) => {
   const path = (req.url ?? '/').split('?')[0];
   console.log(`${req.method} ${path}`);
 
-  const name = path === '/' ? '/selftest.html' : path;
+  const name = path === '/' ? '/index.html' : path;
   const file = join(root, normalize(name).replace(/^(\.\.[/\\])+/, ''));
 
   try {

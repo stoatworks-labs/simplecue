@@ -1,10 +1,21 @@
-# Cross-platform engine check
+# Cross-platform checks
 
-Runs the wasm engine and its AudioWorklet in a real browser on another machine
-and reports whether audio actually rendered. It deliberately does not touch the
-React UI: the UI is ordinary DOM and is not what varies between platforms. What
-varies is WebAssembly on a different CPU, AudioWorklet on a different audio
-backend, and each engine's autoplay policy.
+Two harnesses, answering two different questions.
+
+**`selftest.html` — does the engine work here?** Runs the wasm engine and its
+AudioWorklet and reports whether audio actually rendered. It deliberately does
+not touch the React UI: the UI is ordinary DOM and is not what varies between
+platforms. What varies is WebAssembly on a different CPU, AudioWorklet on a
+different audio backend, and each engine's autoplay policy. It needs no
+automation — the page runs itself and POSTs its result, so it works anywhere a
+browser can be pointed at a URL.
+
+**`drive-app.mjs` / `drive-app-webdriver.mjs` — is the app usable here?** Drives
+the real application with *trusted* clicks: start the engine, open a show, load
+audio, press GO, watch the play head move, hold a vamp. The CDP version drives
+Chromium and Edge; the WebDriver version drives Safari. A real click matters
+because it is what satisfies an autoplay policy, which a synthetic event does
+not.
 
 ## Running it
 
@@ -42,17 +53,61 @@ user_pref("media.autoplay.default", 0);
 user_pref("media.autoplay.blocking_policy", 0);
 ```
 
+## Driving the whole app
+
+The app is served from here and reached the same way. Chromium and Edge take a
+second tunnel for the debugger:
+
+```bash
+npm run build --prefix webcue
+node webcue/test-platform/server.mjs 8124 webcue/packages/app/dist &
+
+# Linux, then drive it from this machine
+ssh -R 8124:127.0.0.1:8124 -L 9222:127.0.0.1:9222 kdelab \
+  "chromium --headless=new --no-sandbox --disable-gpu \
+   --autoplay-policy=no-user-gesture-required \
+   --remote-debugging-port=9222 --remote-allow-origins='*' \
+   --user-data-dir=/tmp/wc-app about:blank & sleep 120"
+
+node webcue/test-platform/drive-app.mjs 9222 http://localhost:8124/
+```
+
+Safari is local, so it needs no tunnel — but it does need **Allow Remote
+Automation** ticked in Safari Settings, Developer tab, and `safaridriver
+--enable` run once:
+
+```bash
+safaridriver -p 4444 &
+node webcue/test-platform/drive-app-webdriver.mjs 4444 http://localhost:8124/
+```
+
 ## What it found
 
-Recorded on 2026-08-29, engine at 72,712 bytes. `results.example.json` is that run.
+Recorded on 2026-08-29, engine at 72,712 bytes. `results.example.json` is an
+engine-check run.
+
+### Engine
 
 | Platform | Engine | Result | Context rate |
 |---|---|---|---|
 | macOS 15 | Chromium 148 | all passed | 48000 |
+| macOS 15 | **Safari 26.4** | wasm + worklet passed, rendering needs a gesture | 48000 |
 | Ubuntu 24.04 x86_64 | Chromium 151 | all passed | 48000 |
 | Ubuntu 24.04 x86_64 | Firefox 154 (Gecko) | all passed | 48000 |
-| Ubuntu 24.04 x86_64 | WebKitGTK 605.1.15 | wasm + worklet passed, rendering skipped | 44100 |
+| Ubuntu 24.04 x86_64 | WebKitGTK 605.1.15 | wasm + worklet passed, rendering needs a gesture | 44100 |
 | Windows 11 Pro x64 | Edge 151 | all passed | 44100 |
+
+### The whole app, driven with real clicks
+
+| Platform | Engine | Result |
+|---|---|---|
+| Ubuntu 24.04 x86_64 | Chromium 151 | 10 of 10 |
+| Windows 11 Pro x64 | Edge 151 | 10 of 10 |
+| macOS 15 | Safari 26.4 | not run — needs Allow Remote Automation |
+
+Both app runs got all the way through: the engine started from a click, a show
+opened, its audio loaded, GO fired a cue and moved standby past the Play step,
+the play head advanced while it played, and a second cue vamped and held.
 
 Two findings worth keeping.
 
@@ -71,12 +126,25 @@ resampled to the context rate when it is decoded, which is the browser's
 equivalent of the desktop app resampling at load — but any code that assumes
 48000 would be wrong on two of the five configurations tested here.
 
+**The window is small in headless mode** — 780 px wide by default — and the
+layout is tight there: the transport wraps and the cue list columns squeeze.
+Nothing breaks, and a cue player is a desktop-width tool, but it is worth
+knowing that nobody has looked at this below about 1000 px.
+
 ## What this does not cover
 
-**Safari itself.** WebKitGTK is the same engine core, so it catches engine-level
-problems, but it is a different platform with a different audio backend and it
-is not what anyone will actually run. Real Safari on macOS and on iPadOS remains
-untested.
+**Safari rendering, and the app in Safari.** The engine reaches every step short
+of rendering, which needs a gesture the self-test cannot make. Finishing that
+needs one manual toggle — Allow Remote Automation — after which
+`drive-app-webdriver.mjs` runs the full app test with trusted clicks.
 
-**The UI.** Nothing here clicks a button, opens a show or drags a marker. It
-proves the engine runs; it does not prove the app is usable on that machine.
+**iPadOS.** A plausible machine to run a show from, and completely untested.
+Touch, the on-screen keyboard, and Safari's stricter memory limits are all
+unknowns.
+
+**Real audio hardware.** Every run here is on a virtual or headless audio
+device. Nothing has been heard by anyone, on any platform, and the desktop app
+carries the same caveat.
+
+**Long shows.** The test audio is seconds long. Memory pressure at
+~23 MB per stereo minute is untested anywhere.
