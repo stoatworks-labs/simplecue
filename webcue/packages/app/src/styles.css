@@ -1,0 +1,948 @@
+/* Follows the desktop app's palette rather than inventing one: an operator who
+   knows SimpleCue should recognise the standby purple, the playing green and
+   the vamp amber without being told. */
+
+:root {
+  --bg: #14161a;
+  --panel: #1c1f25;
+  --panel-2: #232730;
+  --line: #2c313a;
+  --text: #e6e9ef;
+  --dim: #8b93a3;
+  --accent: #6ea8fe;
+  --standby: #9d7cff;
+  --live: #5ddb9a;
+  --vamp: #ffc857;
+  --fading: #ff9a6e;
+  --danger: #ff6b6b;
+
+  color-scheme: dark;
+  font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: 14px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.mono {
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.dim {
+  color: var(--dim);
+}
+
+button {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.38;
+  cursor: default;
+}
+
+button .key {
+  color: var(--dim);
+  font-size: 11px;
+  margin-left: 2px;
+}
+
+button.go {
+  background: var(--live);
+  color: #10131a;
+  border-color: var(--live);
+  font-weight: 700;
+}
+
+button.go .key {
+  color: #10131a;
+  opacity: 0.65;
+}
+
+button.panic {
+  background: var(--danger);
+  color: #1a0d0d;
+  border-color: var(--danger);
+  font-weight: 700;
+}
+
+button.panic .key {
+  color: #1a0d0d;
+  opacity: 0.65;
+}
+
+button.vamp-ready {
+  border-color: var(--vamp);
+  color: var(--vamp);
+}
+
+/* ---- layout ---------------------------------------------------------- */
+
+.app {
+  display: flex;
+  flex-direction: column;
+
+  /* 100vh is WRONG on iOS Safari: it is the viewport with the browser chrome
+     ignored, so the app ends up taller than what you can see and the whole
+     thing scrolls. Found on an iPad simulator, where the title bar and the file
+     buttons scrolled off the top and the status bar sat below the fold. On a
+     cue player that is not cosmetic — GO can leave the screen during a show.
+     100dvh is the visible viewport and tracks the chrome as it hides. */
+  height: 100vh;
+  height: 100dvh;
+
+  /* No rubber-banding: dragging a waveform marker near the edge should not
+     bounce the page. */
+  overscroll-behavior: none;
+}
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.titlebar h1 {
+  font-size: 15px;
+  margin: 0;
+  font-weight: 700;
+}
+
+.show-name {
+  flex: 1;
+  color: var(--dim);
+  font-size: 13px;
+}
+
+.dirty {
+  color: var(--vamp);
+}
+
+.titlebar-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.start-strip,
+.warning-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+
+.start-strip {
+  background: var(--panel-2);
+}
+
+.warning-strip {
+  background: rgba(255, 200, 87, 0.12);
+  color: var(--vamp);
+}
+
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.transport .go {
+  font-size: 15px;
+  padding: 12px 22px;
+}
+
+.standby-readout {
+  flex: 1;
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+
+.standby-number {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--standby);
+  font-variant-numeric: tabular-nums;
+  font-family: ui-monospace, Menlo, monospace;
+}
+
+.standby-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.standby-step {
+  color: var(--dim);
+}
+
+.master {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.master input[type='range'] {
+  width: 140px;
+  accent-color: var(--accent);
+}
+
+.master-value {
+  width: 62px;
+  text-align: right;
+}
+
+.body {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+}
+
+.list-pane {
+  flex: 1;
+  overflow: auto;
+}
+
+/* ---- cue list -------------------------------------------------------- */
+
+.cue-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.cue-table th {
+  text-align: left;
+  padding: 8px 10px;
+  color: var(--dim);
+  font-weight: 500;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  background: var(--bg);
+}
+
+.cue-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cue-row {
+  cursor: pointer;
+}
+
+.cue-row:hover td {
+  background: rgba(110, 168, 254, 0.06);
+}
+
+.step-row {
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.step-row td {
+  padding-top: 4px;
+  padding-bottom: 4px;
+  background: rgba(255, 255, 255, 0.015);
+}
+
+.step-row:hover td {
+  background: rgba(110, 168, 254, 0.06);
+}
+
+/* The standby marker: a bar down the left edge, as the desktop paints it. */
+tr.standby td {
+  background: rgba(157, 124, 255, 0.13) !important;
+}
+
+tr.standby td:first-child {
+  box-shadow: inset 3px 0 0 var(--standby);
+}
+
+.twisty {
+  background: none;
+  border: none;
+  padding: 0 6px 0 0;
+  color: var(--dim);
+  font-size: 9px;
+  cursor: pointer;
+  display: inline-block;
+  transition: transform 0.12s;
+}
+
+.twisty.open {
+  transform: rotate(90deg);
+}
+
+.step-label {
+  padding-left: 26px !important;
+}
+
+.step-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 8px;
+  vertical-align: middle;
+  background: var(--dim);
+}
+
+.step-dot.play {
+  background: var(--live);
+}
+.step-dot.devamp {
+  background: var(--vamp);
+}
+.step-dot.end {
+  background: var(--fading);
+}
+
+.badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+.badge.playing {
+  background: rgba(93, 219, 154, 0.18);
+  color: var(--live);
+}
+.badge.vamp {
+  background: rgba(255, 200, 87, 0.18);
+  color: var(--vamp);
+}
+.badge.wait {
+  background: rgba(110, 168, 254, 0.18);
+  color: var(--accent);
+}
+.badge.fading {
+  background: rgba(255, 154, 110, 0.18);
+  color: var(--fading);
+}
+.badge.paused {
+  background: rgba(139, 147, 163, 0.18);
+  color: var(--dim);
+}
+.badge.missing {
+  background: rgba(255, 107, 107, 0.18);
+  color: var(--danger);
+}
+
+.missing-text {
+  color: var(--danger);
+}
+
+.empty-list {
+  padding: 40px 16px;
+  color: var(--dim);
+  font-size: 13px;
+}
+
+.empty-list code {
+  background: var(--panel-2);
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+/* ---- running panel --------------------------------------------------- */
+
+.active-panel {
+  width: 290px;
+  border-left: 1px solid var(--line);
+  background: var(--panel);
+  overflow: auto;
+  padding: 12px;
+}
+
+.active-panel h2 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  font-weight: 500;
+  margin: 0 0 10px;
+}
+
+.active-panel .empty {
+  font-size: 13px;
+}
+
+.active-row {
+  border-left: 3px solid var(--live);
+  background: var(--panel-2);
+  border-radius: 4px;
+  padding: 8px 10px;
+  margin-bottom: 8px;
+}
+
+.active-row.vamp {
+  border-left-color: var(--vamp);
+}
+.active-row.wait {
+  border-left-color: var(--accent);
+}
+.active-row.fading {
+  border-left-color: var(--fading);
+}
+.active-row.paused {
+  border-left-color: var(--dim);
+}
+
+.active-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.active-number {
+  font-weight: 700;
+}
+
+.active-name {
+  flex: 1;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.active-state {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.active-state.vamp {
+  color: var(--vamp);
+}
+.active-state.wait {
+  color: var(--accent);
+}
+.active-state.fading {
+  color: var(--fading);
+}
+
+.active-times {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.active-bar {
+  height: 3px;
+  background: var(--line);
+  border-radius: 2px;
+  margin-top: 6px;
+  overflow: hidden;
+}
+
+.active-bar-fill {
+  height: 100%;
+  background: var(--live);
+}
+
+.active-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.active-actions button {
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+/* ---- status bar ------------------------------------------------------ */
+
+.statusbar {
+  display: flex;
+  gap: 16px;
+  padding: 7px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+  font-size: 12px;
+}
+
+.statusbar .log {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: right;
+}
+
+/* ---- modal ----------------------------------------------------------- */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.66);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.modal {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 22px;
+  max-width: 560px;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.modal h2 {
+  margin: 0 0 14px;
+  font-size: 16px;
+}
+
+.modal p {
+  margin: 0 0 12px;
+}
+
+.modal .warn {
+  color: var(--vamp);
+}
+
+.fold-list {
+  margin: 0 0 14px;
+  padding-left: 18px;
+  max-height: 150px;
+  overflow: auto;
+}
+
+.fold-list li {
+  margin-bottom: 3px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+/* ---- list toolbar ---------------------------------------------------- */
+
+.list-toolbar {
+  display: flex;
+  gap: 8px;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.list-toolbar button {
+  padding: 5px 10px;
+  font-size: 12px;
+}
+
+tr.cue-row.selected td {
+  outline: 1px solid rgba(110, 168, 254, 0.35);
+  outline-offset: -1px;
+}
+
+/* ---- inspector -------------------------------------------------------- */
+
+.inspector {
+  border-top: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.inspector-top {
+  padding: 10px 12px 6px;
+  border-bottom: 1px solid var(--line);
+}
+
+.waveform {
+  display: block;
+  border-radius: 4px;
+  background: var(--panel-2);
+}
+
+.time-bar {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  font-size: 11px;
+}
+
+.time-bar label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.time-field {
+  width: 92px;
+}
+
+.inspector-scroll {
+  padding: 4px 12px 16px;
+}
+
+.inspector-section {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.inspector-section:last-of-type {
+  border-bottom: none;
+}
+
+.inspector-section h3 {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--dim);
+  font-weight: 500;
+  margin: 0 0 10px;
+}
+
+.field-row {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+
+.field-label {
+  color: var(--dim);
+  text-align: right;
+}
+
+.field-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.field-hint {
+  grid-column: 2;
+  font-size: 11px;
+}
+
+.inspector input[type='text'],
+.inspector textarea,
+.inspector select {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 5px 7px;
+  font-size: 12px;
+  font-family: inherit;
+  min-width: 0;
+  flex: 1;
+}
+
+.inspector textarea {
+  resize: vertical;
+}
+
+.inspector input[type='text']:focus,
+.inspector textarea:focus,
+.inspector select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.inspector input:disabled,
+.inspector select:disabled {
+  opacity: 0.4;
+}
+
+.slider-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+
+.slider-wrap input[type='range'] {
+  flex: 1;
+  accent-color: var(--accent);
+  min-width: 80px;
+}
+
+.slider-wrap input[type='range']:disabled {
+  opacity: 0.35;
+}
+
+.slider-value {
+  width: 82px;
+  text-align: right;
+  font-size: 11px;
+  color: var(--dim);
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  margin-bottom: 10px;
+  cursor: pointer;
+}
+
+.check input {
+  accent-color: var(--accent);
+}
+
+.file-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+
+.warn-note {
+  font-size: 11px;
+  border-left: 2px solid var(--vamp);
+  padding-left: 8px;
+  margin: 0 0 10px;
+}
+
+.inspector-footer {
+  padding-top: 12px;
+}
+
+.danger-text {
+  background: none;
+  border: none;
+  color: var(--danger);
+  padding: 4px 0;
+  font-size: 12px;
+}
+
+.danger-text:hover {
+  text-decoration: underline;
+}
+
+.link-button {
+  background: none;
+  border: none;
+  color: var(--accent);
+  padding: 6px 0 0;
+  font-size: 11px;
+}
+
+/* ---- routing matrix --------------------------------------------------- */
+
+.routing-note {
+  font-size: 11px;
+  margin: 0 0 8px;
+}
+
+.routing-grid {
+  border-collapse: collapse;
+}
+
+.routing-grid th {
+  font-size: 10px;
+  color: var(--dim);
+  font-weight: 500;
+  padding: 2px 4px;
+}
+
+.routing-source {
+  text-align: right !important;
+  padding-right: 8px !important;
+}
+
+.routing-grid td {
+  padding: 2px;
+  border: none;
+}
+
+.crosspoint {
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 3px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  font-size: 9px;
+  color: #10131a;
+}
+
+.crosspoint.on {
+  background: var(--live);
+  border-color: var(--live);
+  font-weight: 700;
+}
+
+.routing-grid.implicit .crosspoint.on {
+  background: rgba(157, 124, 255, 0.55);
+  border-color: rgba(157, 124, 255, 0.7);
+}
+
+.titlebar-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--line);
+}
+
+.permission-strip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(110, 168, 254, 0.12);
+  color: var(--accent);
+  font-size: 13px;
+}
+
+.permission-strip strong {
+  font-weight: 600;
+}
+
+/* ---- narrow screens ---------------------------------------------------
+   Not an attempt to make webcue a phone app: running a show from a phone is
+   not a thing anyone should do, and the inspector needs width to be usable.
+   But a public page gets opened on phones out of curiosity, and the fixed
+   290px running panel left the cue list about 270px wide on a 411px screen —
+   which reads as broken rather than as "wrong tool". Below 800px the panel
+   goes underneath instead of beside, and the toolbars wrap rather than
+   overflowing off the right edge. */
+@media (max-width: 800px) {
+  .body {
+    flex-direction: column;
+  }
+
+  .active-panel {
+    width: auto;
+    border-left: none;
+    border-top: 1px solid var(--line);
+    max-height: 40vh;
+  }
+
+  .titlebar,
+  .titlebar-actions,
+  .transport,
+  .list-toolbar {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+
+  /* The divider is a vertical rule between two groups of buttons; once they
+     wrap it lands in the middle of a row and reads as a stray mark. */
+  .titlebar-divider {
+    display: none;
+  }
+
+  .show-name {
+    flex-basis: 100%;
+  }
+
+  .standby-readout {
+    flex-basis: 100%;
+    order: 10;
+  }
+
+  .master {
+    flex-basis: 100%;
+  }
+
+  .master input[type='range'] {
+    flex: 1;
+  }
+}
+
+/* ---- drag and drop ----------------------------------------------------- */
+
+.toolbar-hint {
+  font-size: 11px;
+  align-self: center;
+}
+
+.drop-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 22, 26, 0.75);
+  border: 3px dashed var(--live);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  /* The overlay must not eat the drop it is advertising. */
+  pointer-events: none;
+}
+
+.drop-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  text-align: center;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 26px 34px;
+  max-width: 420px;
+}
+
+.drop-card strong {
+  font-size: 18px;
+  color: var(--live);
+}
+
+.drop-card span {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.drop-card code {
+  background: var(--panel-2);
+  padding: 1px 5px;
+  border-radius: 4px;
+}

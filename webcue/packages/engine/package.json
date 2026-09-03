@@ -1,0 +1,20 @@
+{
+  "//": "Browser-only binding: the wasm, the AudioWorklet, and the VoiceHost implementation over them. Deliberately has no tests — everything worth testing lives in @webcue/core, which is why this package is thin enough not to need any. The engine's own correctness is covered by webcue/build.sh, which compares the wasm against a native build sample by sample.",
+  "name": "@webcue/engine",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./worklet": "./worklet/webcue-processor.js"
+  },
+  "dependencies": {
+    "@webcue/core": "*"
+  },
+  "scripts": {
+    "test": "vitest run --passWithNoTests",
+    "typecheck": "tsc --noEmit"
+  }
+}
