@@ -3,20 +3,12 @@
 #include <juce_core/juce_core.h>
 
 #include "Model/ControlMessage.h"
+#include "Model/CueTypes.h"
 #include "Model/FadeCurve.h"
 #include "Model/StreamingSettings.h"
 
 namespace cp
 {
-
-/** Hard ceilings used to size the lock-free structures the audio thread reads.
-    Raising these costs only memory; nothing in the engine iterates to the limit. */
-namespace limits
-{
-    static constexpr int maxSourceChannels = 16;  ///< Channels read from one audio file.
-    static constexpr int maxOutputChannels = 64;  ///< Device outputs a cue can be routed to.
-    static constexpr int maxVoices         = 32;  ///< Simultaneously sounding cue instances.
-}
 
 //==============================================================================
 /** How a cue hands over to the cue it is linked to.
@@ -48,25 +40,8 @@ struct Link
     bool targetsNextCue() const noexcept { return target.isNull(); }
 };
 
-//==============================================================================
-/** When a vamp lets go of its loop after the operator calls for it. */
-enum class VampRelease
-{
-    atEndOfPass = 0,  ///< Finish the current pass, then continue past the vamp out point.
-    immediately       ///< Leave the loop at the next sample. Can click on tonal material.
-};
-
 juce::String toString (VampRelease r);
 VampRelease vampReleaseFromString (const juce::String& s);
-
-//==============================================================================
-/** One routed connection: source channel -> device output channel, at a linear gain. */
-struct RoutePoint
-{
-    int   sourceChannel { 0 };
-    int   outputChannel { 0 };
-    float gain { 1.0f };
-};
 
 //==============================================================================
 /** What the End step of a cue does when it is reached. */
