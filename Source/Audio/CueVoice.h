@@ -3,7 +3,10 @@
 #include <juce_audio_basics/juce_audio_basics.h>
 
 #include "Audio/SampleSource.h"
-#include "Model/Cue.h"
+// The audio-thread types only. Cue.h carries file paths, juce::var persistence
+// and streaming settings that nothing on this thread should be able to reach.
+#include "Model/CueTypes.h"
+#include "Model/FadeCurve.h"
 
 namespace cp
 {
