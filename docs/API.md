@@ -51,9 +51,13 @@ recoverable by hand if something goes wrong at a venue.
 
 ### Saving is atomic
 
-The show is written to a sibling `.tmp` file and then moved into place, so a failure
-part-way through cannot destroy the show already on disk. At a venue this file is often the
-only copy.
+The show is written to a sibling `.tmp` file and then put into place with a single
+replace — `ReplaceFile` on Windows, `rename(2)` on macOS and Linux — so a failure
+part-way through cannot destroy the show already on disk, and there is no moment at
+which the show file does not exist. At a venue this file is often the only copy.
+
+If the replace fails, the `.tmp` is left behind on purpose: the original is untouched,
+and the show you just saved is in that file.
 
 ---
 

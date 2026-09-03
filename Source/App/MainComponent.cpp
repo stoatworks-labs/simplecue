@@ -805,8 +805,18 @@ int MainComponent::resolveControlTarget (const ControlAction& action) const
 
     const auto wanted = action.cueNumber.trim();
 
+    // Exact first, so a show that deliberately distinguishes "a1" from "A1"
+    // still resolves each to itself.
     for (int i = 0; i < list.size(); ++i)
         if (const auto* cue = list.get (i); cue != nullptr && cue->number.trim() == wanted)
+            return i;
+
+    // Then ignoring case: cue numbers are free text off a cue sheet ("PRE",
+    // "A1", "Q3"), and an operator typing /cue/pre/go at a tablet should not
+    // have to reproduce the capitalisation of the cue list to fire a cue.
+    for (int i = 0; i < list.size(); ++i)
+        if (const auto* cue = list.get (i);
+            cue != nullptr && cue->number.trim().equalsIgnoreCase (wanted))
             return i;
 
     // Cue numbers are free text, so "12.50" from a lighting desk should still find "12.5".

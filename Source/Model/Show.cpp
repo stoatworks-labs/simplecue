@@ -122,16 +122,28 @@ juce::String Show::save (const juce::File& file)
 
     // Write to a sibling first so a failure part-way through cannot destroy the show
     // that is already on disk — this file is often the only copy at a venue.
+    //
+    // replaceFileIn, NOT moveFileTo. juce::File::moveFileTo unlinks the destination
+    // before it moves anything (`if (! newFile.deleteFile()) return false;` then
+    // moveInternal), so between those two calls the show does not exist on any
+    // platform — which is exactly the window this comment claims does not exist.
+    // replaceFileIn goes through replaceInternal: ReplaceFile on Windows, rename(2)
+    // on POSIX, both of which put the new file over the old one in one step and
+    // leave the old one intact if they fail.
     auto temp = target.getSiblingFile (target.getFileName() + ".tmp");
     temp.deleteFile();
 
     if (! temp.replaceWithText (json))
         return "Could not write to " + temp.getFullPathName();
 
-    if (! temp.moveFileTo (target))
+    if (! temp.replaceFileIn (target))
     {
-        temp.deleteFile();
-        return "Could not replace " + target.getFullPathName();
+        // The temp is deliberately left behind. The old show is still on disk —
+        // nothing has been unlinked — so the operator has both the original and
+        // the show they just tried to save, and deleting the replacement here is
+        // how a failed save used to destroy the second one.
+        return "Could not replace " + target.getFullPathName()
+             + " — the show you saved is in " + temp.getFullPathName();
     }
 
     showFile = target;

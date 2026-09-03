@@ -109,7 +109,14 @@ ControlAction OscControl::actionForAddress (const juce::String& address,
     ControlAction action;
     action.origin = "OSC " + address;
 
-    auto path = address.trim().toLowerCase();
+    // Case is folded for ROUTING ONLY — half the OSC controllers in the world
+    // capitalise differently from the other half, so the verbs and the fixed
+    // path segments are matched without regard to it. The cue NUMBER is not a
+    // keyword: it is operator-facing free text off the cue sheet, and `PRE`,
+    // `A1` and `Q3` are all documented examples. Lower-casing the whole address
+    // meant those cues could not be fired over OSC at all, and the error came
+    // back quoting text the operator had never typed.
+    auto path = address.trim();
 
     while (path.endsWithChar ('/'))
         path = path.dropLastCharacters (1);
@@ -118,7 +125,7 @@ ControlAction OscControl::actionForAddress (const juce::String& address,
         return action;
 
     // --- cue-specific: /cue/<number>/<verb> -----------------------------------
-    if (path.startsWith ("/cue/"))
+    if (path.startsWithIgnoreCase ("/cue/"))
     {
         const auto remainder = path.substring (5);
         const auto slash = remainder.lastIndexOfChar ('/');
@@ -126,7 +133,7 @@ ControlAction OscControl::actionForAddress (const juce::String& address,
         if (slash > 0)
         {
             const auto number = remainder.substring (0, slash);
-            const auto verb   = remainder.substring (slash + 1);
+            const auto verb   = remainder.substring (slash + 1).toLowerCase();
 
             action.cueNumber = number;
 
@@ -144,7 +151,7 @@ ControlAction OscControl::actionForAddress (const juce::String& address,
         }
 
         // /cue/go is a synonym for /go, for controllers that like a namespace.
-        if (remainder == "go")
+        if (remainder.equalsIgnoreCase ("go"))
         {
             action.type = ControlActionType::go;
             return action;
@@ -152,33 +159,36 @@ ControlAction OscControl::actionForAddress (const juce::String& address,
     }
 
     // --- standby --------------------------------------------------------------
-    if (path.startsWith ("/standby/"))
+    if (path.startsWithIgnoreCase ("/standby/"))
     {
         const auto rest = path.substring (9);
 
-        if (rest == "next")          action.type = ControlActionType::standbyNext;
-        else if (rest == "previous" || rest == "prev") action.type = ControlActionType::standbyPrevious;
+        if (rest.equalsIgnoreCase ("next"))          action.type = ControlActionType::standbyNext;
+        else if (rest.equalsIgnoreCase ("previous")
+                 || rest.equalsIgnoreCase ("prev"))  action.type = ControlActionType::standbyPrevious;
         else
         {
             action.type = ControlActionType::standbyCue;
-            action.cueNumber = rest;
+            action.cueNumber = rest;   // as typed — see the note above
         }
 
         return action;
     }
 
     // --- global ---------------------------------------------------------------
-    if (path == "/go")                    action.type = ControlActionType::go;
-    else if (path == "/stop")             { action.type = ControlActionType::stopAll;
+    const auto verb = path.toLowerCase();
+
+    if (verb == "/go")                    action.type = ControlActionType::go;
+    else if (verb == "/stop")             { action.type = ControlActionType::stopAll;
                                             action.value = numericArgument (arguments, 0, 2.0); }
-    else if (path == "/stopall")          { action.type = ControlActionType::stopAll;
+    else if (verb == "/stopall")          { action.type = ControlActionType::stopAll;
                                             action.value = numericArgument (arguments, 0, 2.0); }
-    else if (path == "/panic")            action.type = ControlActionType::panic;
-    else if (path == "/pause")            action.type = ControlActionType::pause;
-    else if (path == "/resume")           action.type = ControlActionType::resume;
-    else if (path == "/pause/toggle")     action.type = ControlActionType::pauseToggle;
-    else if (path == "/releasevamp")      action.type = ControlActionType::releaseVamp;
-    else if (path == "/master/level")     { action.type = ControlActionType::masterLevel;
+    else if (verb == "/panic")            action.type = ControlActionType::panic;
+    else if (verb == "/pause")            action.type = ControlActionType::pause;
+    else if (verb == "/resume")           action.type = ControlActionType::resume;
+    else if (verb == "/pause/toggle")     action.type = ControlActionType::pauseToggle;
+    else if (verb == "/releasevamp")      action.type = ControlActionType::releaseVamp;
+    else if (verb == "/master/level")     { action.type = ControlActionType::masterLevel;
                                             action.value = numericArgument (arguments, 0, 0.0); }
 
     return action;

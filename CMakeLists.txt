@@ -245,7 +245,11 @@ target_compile_definitions(SimpleCueTests
     PRIVATE
         JUCE_WEB_BROWSER=0
         JUCE_USE_CURL=0
-        JUCE_STANDALONE_APPLICATION=1)
+        JUCE_STANDALONE_APPLICATION=1
+        # So the suite can assert on the save path's source. The atomicity of a
+        # replace is a property of which API is called, not of any state a test
+        # can observe afterwards — see testShowSaveIsAtomic.
+        SIMPLECUE_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/Source")
 
 target_link_libraries(SimpleCueTests
     PRIVATE

@@ -736,6 +736,96 @@ void testShowRoundTrip (const juce::File& directory, const juce::File& audioFile
     showFile.deleteFile();
 }
 
+/// Saving over an existing show must never leave the venue with no show file.
+///
+/// Show::save used to finish with juce::File::moveFileTo, which unlinks the
+/// destination before it moves anything, so there was a window on every save
+/// where the show did not exist — and if the move then failed, the error path
+/// deleted the replacement too, losing both copies. This is the one file a
+/// venue often has only one of.
+///
+/// Note what is and is not provable here. The defect was a RACE WINDOW, not a
+/// wrong end state: after moveFileTo returns, the file is back, so the
+/// behavioural checks below pass with the bug present — they were tried against
+/// it and did not fail. Nor does a read-only directory discriminate the two
+/// calls, because the temp write fails first and save() returns before it ever
+/// reaches the move. What actually distinguishes them is WHICH API is called,
+/// so that is asserted directly, against the source.
+void testShowSaveIsAtomic (const juce::File& directory)
+{
+    cptest::section ("show save replaces in one step");
+
+    const auto showFile = directory.getChildFile ("atomic.cueshow");
+    const auto temp = showFile.getSiblingFile (showFile.getFileName() + ".tmp");
+
+    Show first;
+    first.setMasterGainDb (-1.0);
+    check (first.save (showFile).isEmpty(), "first save succeeds");
+    const auto firstContents = showFile.loadFileAsString();
+
+    // Save again over the top: the destination exists, which is the case that
+    // went through deleteFile() before.
+    Show second;
+    second.setMasterGainDb (-9.0);
+    check (second.save (showFile).isEmpty(), "saving over an existing show succeeds");
+    check (showFile.existsAsFile(), "the show file still exists after being replaced");
+    check (showFile.loadFileAsString() != firstContents, "the replacement actually landed");
+    check (! temp.existsAsFile(), "no .tmp is left beside a successful save");
+
+    Show reloaded;
+    check (reloaded.load (showFile).isEmpty(), "the replaced show loads");
+    checkNear (reloaded.getMasterGainDb(), -9.0, 1.0e-9, "the replaced show is the new one");
+
+    // A save that cannot land must leave the existing show untouched, and must
+    // say so rather than reporting success. (This fails at the temp write, not
+    // at the replace — it is worth having, but it is not the atomicity check.)
+    const auto locked = directory.getChildFile ("locked");
+    locked.createDirectory();
+    const auto lockedShow = locked.getChildFile ("keep me.cueshow");
+
+    Show original;
+    original.setMasterGainDb (-2.5);
+    check (original.save (lockedShow).isEmpty(), "a show exists in the directory");
+    const auto before = lockedShow.loadFileAsString();
+
+    if (locked.setReadOnly (true))
+    {
+        Show attempt;
+        attempt.setMasterGainDb (-7.5);
+        const auto error = attempt.save (lockedShow);
+
+        check (error.isNotEmpty(), "a save that cannot land reports an error");
+        check (lockedShow.existsAsFile(), "a failed save leaves the show on disk");
+        cptest::checkEqual (lockedShow.loadFileAsString(), before,
+                            "a failed save leaves the show unchanged");
+
+        locked.setReadOnly (false);
+    }
+
+    // The atomicity assertion proper. moveFileTo unlinks the destination first;
+    // replaceFileIn does not. Nothing observable after the fact tells them
+    // apart, so the requirement is pinned where it lives.
+    const juce::File showSource { juce::String (SIMPLECUE_SOURCE_DIR) + "/Model/Show.cpp" };
+    check (showSource.existsAsFile(), "Show.cpp is where the test expects it");
+
+    if (showSource.existsAsFile())
+    {
+        const auto source = showSource.loadFileAsString();
+        const auto saveBody = source.fromFirstOccurrenceOf ("juce::String Show::save", false, false)
+                                    .upToFirstOccurrenceOf ("juce::String Show::load", false, false);
+
+        // The CALL form only, so the comment above it may keep naming
+        // moveFileTo to explain why it is not used.
+        check (saveBody.contains ("replaceFileIn ("),
+               "Show::save replaces the show with replaceFileIn");
+        check (! saveBody.contains ("moveFileTo ("),
+               "Show::save does not call moveFileTo, which unlinks the show first");
+    }
+
+    locked.deleteRecursively();
+    showFile.deleteFile();
+}
+
 void testCueGeometry()
 {
     cptest::section ("cue timing arithmetic");
@@ -836,6 +926,7 @@ int main()
     testCueGeometry();
     testCueListEditing();
     testShowRoundTrip (directory, stereoFile);
+    testShowSaveIsAtomic (directory);
 
     source.reset();
     directory.deleteRecursively();

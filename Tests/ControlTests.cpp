@@ -196,6 +196,41 @@ void testOscAddresses()
         checkEqual (action.cueNumber, "3", "standby cue number parsed");
     }
 
+    // A cue number is free text off the cue sheet, not a keyword. The address
+    // used to be lower-cased whole, so a cue numbered PRE, A1 or Q3 could not be
+    // fired over OSC at all — and the error quoted "pre", text the operator had
+    // never typed, pointing the diagnosis away from the cause. Only the verbs
+    // and the fixed segments are case-folded.
+    {
+        const auto action = OscControl::actionForAddress ("/cue/PRE/go", none);
+        check (action.type == ControlActionType::goCue, "/cue/PRE/go is a cue fire");
+        checkEqual (action.cueNumber, "PRE", "an alphabetic cue number keeps its case");
+    }
+
+    {
+        const auto action = OscControl::actionForAddress ("/cue/A1/standby", none);
+        check (action.type == ControlActionType::standbyCue, "/cue/A1/standby stands a cue by");
+        checkEqual (action.cueNumber, "A1", "a mixed cue number keeps its case");
+    }
+
+    {
+        const auto action = OscControl::actionForAddress ("/cue/Q3/GO", none);
+        check (action.type == ControlActionType::goCue, "the verb is still case-insensitive");
+        checkEqual (action.cueNumber, "Q3", "case-folding the verb does not fold the number");
+    }
+
+    {
+        const auto action = OscControl::actionForAddress ("/STANDBY/PRE", none);
+        check (action.type == ControlActionType::standbyCue, "/STANDBY/<n> still routes");
+        checkEqual (action.cueNumber, "PRE", "standby keeps the cue number's case too");
+    }
+
+    {
+        const auto action = OscControl::actionForAddress ("/CUE/12.5/go", none);
+        check (action.type == ControlActionType::goCue, "an upper-cased /CUE/ still routes");
+        checkEqual (action.cueNumber, "12.5", "a numeric cue number is unaffected");
+    }
+
     check (! OscControl::actionForAddress ("/something/else", none).isValid(),
            "an unknown address produces no action");
     check (! OscControl::actionForAddress ("/cue/12/frobnicate", none).isValid(),

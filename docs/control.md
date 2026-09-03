@@ -18,6 +18,10 @@ first run is not a good guest on a show network.
 
 Set the input port (default 53000) and add one or more targets for outgoing messages and
 status. Addresses are matched **case-insensitively** and a trailing slash is ignored.
+That applies to the verbs and the fixed segments (`/CUE/12/GO` works); the cue number
+itself is passed through as typed, so an alphabetic number such as `PRE` or `A1`
+reaches the cue list intact. Matching a cue number also ignores case, so `/cue/pre/go`
+finds a cue numbered `PRE`.
 
 ### Incoming
 
