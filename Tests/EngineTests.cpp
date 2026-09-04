@@ -788,7 +788,25 @@ void testShowSaveIsAtomic (const juce::File& directory)
     check (original.save (lockedShow).isEmpty(), "a show exists in the directory");
     const auto before = lockedShow.loadFileAsString();
 
-    if (locked.setReadOnly (true))
+    // setReadOnly succeeding does NOT mean the directory now refuses new files.
+    // On Windows the read-only attribute on a *directory* is a marker the shell
+    // uses for folder customisation; it does not stop a file being created
+    // inside. The temp write therefore lands, the save reports success, and
+    // these two assertions fail for a reason that has nothing to do with the
+    // code under test. Prove the precondition by trying to create a file rather
+    // than trusting the platform to enforce the attribute.
+    const auto readOnlyIsEnforced = [&locked]
+    {
+        if (! locked.setReadOnly (true))
+            return false;
+
+        const auto probe = locked.getChildFile ("probe.tmp");
+        const auto created = probe.create().wasOk();
+        probe.deleteFile();
+        return ! created;
+    }();
+
+    if (readOnlyIsEnforced)
     {
         Show attempt;
         attempt.setMasterGainDb (-7.5);
@@ -798,9 +816,9 @@ void testShowSaveIsAtomic (const juce::File& directory)
         check (lockedShow.existsAsFile(), "a failed save leaves the show on disk");
         cptest::checkEqual (lockedShow.loadFileAsString(), before,
                             "a failed save leaves the show unchanged");
-
-        locked.setReadOnly (false);
     }
+
+    locked.setReadOnly (false);
 
     // The atomicity assertion proper. moveFileTo unlinks the destination first;
     // replaceFileIn does not. Nothing observable after the fact tells them
