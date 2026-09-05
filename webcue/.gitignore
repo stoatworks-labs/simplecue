@@ -1,0 +1,13 @@
+build/
+web/webcue-engine.wasm
+node_modules/
+
+# Copied from packages/engine by build.sh. The worklet has one source of truth.
+web/webcue-processor.js
+packages/app/src/engine/
+packages/app/dist/
+
+# Engine assets copied beside the cross-platform harness, and its run output.
+test-platform/webcue-engine.wasm
+test-platform/webcue-processor.js
+test-platform/results.json

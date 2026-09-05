@@ -1,0 +1,20 @@
+{
+  "//": "Workspace root for webcue, the browser build of SimpleCue. It lives inside the C++ repo because the engine compiles from Source/ — packages/engine builds Source/Audio/CueVoice.cpp to WebAssembly unmodified. Keeping the workspace root here rather than at the repo root leaves the C++ side free of node config. This version is webcue's own and is deliberately independent of the CMake project version, which belongs to the desktop app.",
+  "name": "webcue",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "test": "npm run test --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^3.2.4"
+  }
+}
