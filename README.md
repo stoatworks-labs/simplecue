@@ -8,7 +8,7 @@
 > index, through the real `CueVoice` and checks in and out points, fades, loops, vamps, routing
 > and crossfade timing sample by sample. The control layer's wire formats and mappings are
 > tested the same way, and the OSC and Art-Net paths are also driven end to end over real
-> sockets against a running app (380 checks, all passing). It **hasn't** been run on a live show
+> sockets against a running app (404 checks, all passing). It **hasn't** been run on a live show
 > yet. No MIDI, lighting or streaming hardware has been connected to it, and only the
 > macOS/CoreAudio build has been tried on real audio hardware.
 

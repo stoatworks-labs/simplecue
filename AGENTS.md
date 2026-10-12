@@ -110,7 +110,7 @@ a running app over real sockets; run them by hand after touching OSC or DMX.
 
 ## 7. State of play
 
-380 checks pass, including real-socket end-to-end runs, and CI is green on macOS, Linux and
+404 checks pass, including real-socket end-to-end runs, and CI is green on macOS, Linux and
 Windows.
 
 What that does **not** cover, and should not be claimed: **SimpleCue has never been run on a

@@ -100,7 +100,7 @@ against the identical bug in the test.
 entire mapping layer is testable without opening a socket. Keep new mapping logic pure.
 
 `Tests/e2e/` holds two scripts that drive a running app over **real sockets**. Run them by
-hand after changing OSC or DMX — that is what makes the 380-check figure meaningful.
+hand after changing OSC or DMX — that is what makes the 404-check figure meaningful.
 
 ---
 

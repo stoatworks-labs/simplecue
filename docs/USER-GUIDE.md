@@ -4,7 +4,7 @@ SimpleCue is an audio cue player for theatre, live events and installations. You
 cues and press **GO**.
 
 > **Before a show:** the playback engine is verified sample by sample and the control layer is
-> driven end to end over real sockets, 380 checks in all. But SimpleCue **has never been run on a
+> driven end to end over real sockets, 404 checks in all. But SimpleCue **has never been run on a
 > live show**. No MIDI, lighting or streaming hardware has ever been connected to it, and only the
 > macOS/CoreAudio build has been used with real audio hardware. Rehearse with it before you trust
 > it with a performance.
