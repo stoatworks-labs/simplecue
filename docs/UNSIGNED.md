@@ -97,18 +97,18 @@ Get-NetFirewallRule -DisplayName "*SimpleCue*" | Remove-NetFirewallRule
 macOS shows an equivalent one-off prompt — *"Do you want the application to accept
 incoming network connections?"* — click **Allow**. It's under **System Settings →
 Network → Firewall → Options** if you need to change it later. On Linux nothing prompts;
-if you run a firewall, open the ports yourself (`ufw allow <port>/tcp`).
+if you run a firewall, open the ports yourself (`ufw allow <port>/udp`, since OSC, Art-Net
+and sACN all arrive over UDP).
 
 ## Linux
 
 No signing gate. Make the binary executable if you took the tarball:
 
 ```sh
-chmod +x ./simplecue
+chmod +x ./SimpleCue
 ```
 
-The `.deb` and `.rpm` packages are unsigned too, so your package manager may object:
-`sudo dpkg -i <file>.deb` or `sudo rpm -i --nosignature <file>.rpm`.
+The Linux builds only come as a tarball. There's no `.deb` or `.rpm` to sign.
 
 ## Signing it yourself
 
@@ -125,7 +125,7 @@ certificate is trusted immediately. Neither is free.
 ## Verifying a download
 
 Signing proves *who* built it; a checksum proves you got *what they built* — worth doing
-even unsigned. Compare against the release notes:
+even unsigned. Compare against the SHA-256 shown beside each file on the release page:
 
 ```sh
 shasum -a 256 <file>        # macOS / Linux

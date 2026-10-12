@@ -11,7 +11,7 @@ tell which ones are load-bearing and why.
 ## 1. What this is
 
 A **platform-independent audio cue player** for theatre, live events and installation, built
-in JUCE 8 / C++20 with CMake. Public repo. Released v0.3.1 for macOS universal, Windows
+in JUCE 8 / C++20 with CMake. Public repo. Released v0.4.1 for macOS universal, Windows
 x64/arm64 and Linux x64/arm64.
 
 The domain model in one paragraph: a **cue** is an audio file with in/out points, gain and
