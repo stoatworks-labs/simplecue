@@ -297,6 +297,23 @@ and a stop shortcut.
 on one of its sub-cues, sliders don't grab the scroll wheel until you click them, and link modes
 are named for what they do.
 
+**v0.3.1 and v0.3.2:** a log and crash reports, with **Help → Collect Diagnostics...** to bundle
+them into one file you can send and **Help → Open Log Folder** to find them (see
+[docs/diagnostics.md](docs/diagnostics.md)). The downloads gained installers: a `.dmg` and a
+`.pkg` on macOS, and a setup `.exe` on Windows.
+
+**v0.4.0:** an About panel, under **Help → About SimpleCue**.
+
+**v0.4.1:** saving replaces the show file in one step. Before, there was a moment in every save
+when the show file didn't exist, and a save that failed at the wrong point could lose the old
+file and the new one. Cue numbers with capital letters in them (PRE, A1, Q3) can now be fired
+over OSC; the address used to be lower-cased before the lookup, so they never matched.
+
+Both fixes come with tests. The OSC ones fail against the old lower-casing, and the save test
+checks which call does the replacing, since a finished save looks the same either way. The suite
+passes in CI on macOS, Linux and Windows. Windows skips the read-only-folder save checks, because
+it doesn't enforce read-only on a folder.
+
 Not yet built:
 
 - **Phase 3: streaming provider adapters.** OAuth PKCE and transport for the four services
