@@ -25,7 +25,7 @@ jobs:
           # macos-13 (Intel) runners are retired, so x86_64 is cross-compiled from arm64.
           # CMakeLists already defaults CMAKE_OSX_ARCHITECTURES to "arm64;x86_64".
           - name: macOS universal
-            os: macos-14
+            os: macos-15
             artefact: macos-universal
 
           - name: Windows x64

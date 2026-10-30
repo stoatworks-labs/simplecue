@@ -18,7 +18,7 @@ JUCE 8 / C++20. CI is green on macOS, Linux and Windows.
 
 **macOS universal builds:** `CMAKE_OSX_ARCHITECTURES` must be set **before** `project()`, or
 you silently ship arm64-only while the build log reports success. Verify with `lipo`/`file`,
-never the log. CI cross-compiles macOS x86_64 on `macos-14` — never `macos-13`, those runners
+never the log. CI cross-compiles macOS x86_64 on `macos-15` — never `macos-13`, those runners
 are retired.
 
 ---

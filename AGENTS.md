@@ -105,7 +105,7 @@ a running app over real sockets; run them by hand after touching OSC or DMX.
   them and mangles the text. Em dashes are fine in comments, never in literals.
 - macOS universal builds: set `CMAKE_OSX_ARCHITECTURES` **before** `project()` or you
   silently ship arm64-only. Verify with `lipo`/`file`, not the build log.
-- CI builds macOS x86_64 by cross-compiling on `macos-14`; Intel runners are retired.
+- CI builds macOS x86_64 by cross-compiling on `macos-15`; Intel runners are retired.
 - Public repo — ships a user-facing AI-assisted disclaimer.
 
 ## 7. State of play

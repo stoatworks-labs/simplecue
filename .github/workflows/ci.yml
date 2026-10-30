@@ -18,7 +18,7 @@ jobs:
           # No arch flag: CMakeLists already defaults to "arm64;x86_64" on Apple, and
           # passing it on the command line would split the shell at the semicolon.
           - name: macOS (universal)
-            os: macos-14
+            os: macos-15
             cmake_args: ""
           - name: Linux (ALSA + JACK)
             os: ubuntu-latest
