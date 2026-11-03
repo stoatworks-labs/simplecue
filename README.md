@@ -15,6 +15,8 @@
 An audio cue player for theatre, live events and installations that runs on macOS, Windows and
 Linux. It's built around cues, fades, links, loops and vamps.
 
+The [project page](https://stoatworks-labs.com/software/simplecue/) has the downloads, the [user guide](https://stoatworks-labs.com/software/simplecue/guide/) and the video.
+
 [![Watch SimpleCue running (45 seconds)](docs/video-thumb.png)](https://www.youtube.com/watch?v=wUpJPgYGfFk)
 
 *A 45-second tour. Every frame is the app itself, recorded on screen and driven over its own OSC
