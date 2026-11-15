@@ -30,6 +30,7 @@ constexpr double testRate = 48000.0;
 constexpr double rampScale = 1.0e6;   // Keeps values well inside float precision.
 
 using cptest::check;
+using cptest::checkEqual;
 using cptest::checkNear;
 
 /** Sample index encoded in a channel-0 value produced by the ramp. */
@@ -606,6 +607,70 @@ void testCueListEditing()
     check (list.suggestNextNumber() == "3", "next cue number follows the highest still in use");
 }
 
+/** Dragging a cue names a gap between rows, not the index the cue should end up at, and the
+    two differ by one for every drag downwards. */
+void testCueListMoveToGap()
+{
+    cptest::section ("cue list move to gap");
+
+    const auto makeList = [] (CueList& list)
+    {
+        list.clear();
+
+        for (const auto* number : { "A", "B", "C", "D" })
+        {
+            Cue cue;
+            cue.number = number;
+            list.insert (cue);
+        }
+    };
+
+    const auto order = [] (const CueList& list)
+    {
+        juce::String s;
+
+        for (const auto& cue : list.all())
+            s << cue.number;
+
+        return s;
+    };
+
+    CueList list;
+
+    makeList (list);
+    check (list.moveToGap (0, 2) == 1, "dragging A below B ends at index 1");
+    checkEqual (order (list), "BACD", "A dropped between B and C");
+
+    makeList (list);
+    check (list.moveToGap (0, 4) == 3, "dragging A past the end ends at index 3");
+    checkEqual (order (list), "BCDA", "A dropped below the last cue");
+
+    makeList (list);
+    check (list.moveToGap (3, 0) == 0, "dragging D to the top ends at index 0");
+    checkEqual (order (list), "DABC", "D dropped above the first cue");
+
+    makeList (list);
+    check (list.moveToGap (2, 1) == 1, "dragging C up one gap ends at index 1");
+    checkEqual (order (list), "ACBD", "C dropped between A and B");
+
+    // The gaps right above and below a cue both leave it where it is.
+    makeList (list);
+    check (list.moveToGap (1, 1) == -1, "the gap above a cue is a no-op");
+    check (list.moveToGap (1, 2) == -1, "the gap below a cue is a no-op");
+    checkEqual (order (list), "ABCD", "no-op drops change nothing");
+
+    check (list.moveToGap (1, 5) == -1, "a gap past the end is refused");
+    check (list.moveToGap (-1, 0) == -1, "a cue that is not there is refused");
+    checkEqual (order (list), "ABCD", "refused drops change nothing");
+
+    // As with move(), the standby marker stays on its cue.
+    list.setStandbyIndex (list.indexOfID (list.get (2)->id));
+    const auto standbyID = list.get (2)->id;
+    list.moveToGap (2, 0);
+    check (list.getStandbyCue() != nullptr && list.getStandbyCue()->id == standbyID,
+           "standby followed the dragged cue");
+}
+
 void testShowRoundTrip (const juce::File& directory, const juce::File& audioFile)
 {
     cptest::section ("show save / load round trip");
@@ -943,6 +1008,7 @@ int main()
     testResampledLoad (directory, formats);
     testCueGeometry();
     testCueListEditing();
+    testCueListMoveToGap();
     testShowRoundTrip (directory, stereoFile);
     testShowSaveIsAtomic (directory);
 

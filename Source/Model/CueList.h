@@ -42,6 +42,13 @@ public:
     /** Moves the cue at @p fromIndex so that it ends up at @p toIndex. */
     void move (int fromIndex, int toIndex);
 
+    /** Moves the cue at @p fromIndex into the gap just above the cue at @p gapIndex, which
+        is how a drag-and-drop names a place. @p gapIndex runs from 0 (above the first cue)
+        to size() (below the last). Returns the index the cue ends up at, or -1 if nothing
+        moved - dropping a cue into the gap just above or below itself leaves it where it
+        was. */
+    int moveToGap (int fromIndex, int gapIndex);
+
     /** Replaces the cue at @p index, keeping its position. Fires a change message. */
     void replace (int index, Cue cue);
 

@@ -57,6 +57,10 @@ MainComponent::MainComponent (juce::ApplicationProperties& props)
         show.getCueList().setSelectedIndex (index);
         deleteSelectedCue();
     };
+    cueListComponent.onCueMoveRequested = [this] (int index, int gapIndex)
+    {
+        selectMovedCue (show.getCueList().moveToGap (index, gapIndex));
+    };
 
     inspector.onCueEdited    = [this] { cueListComponent.refresh(); updateWindowTitle(); };
     inspector.onFileRequested = [this] (int index) { chooseFileForCue (index); };
@@ -584,9 +588,17 @@ void MainComponent::moveSelectedCue (int delta)
         return;
 
     list.move (from, to);
-    list.setSelectedIndex (to);
-    inspector.setCueIndex (to);
-    cueListComponent.selectRow (to);
+    selectMovedCue (to);
+}
+
+void MainComponent::selectMovedCue (int index)
+{
+    if (index < 0)
+        return;
+
+    show.getCueList().setSelectedIndex (index);
+    inspector.setCueIndex (index);
+    cueListComponent.selectRow (index);
 }
 
 void MainComponent::renumberCues()

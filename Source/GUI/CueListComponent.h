@@ -15,15 +15,22 @@ namespace cp
     decide what happens after a GO — all of which have to be readable at a glance from a
     couple of feet away in the dark.
 */
+/*  DragAndDropTarget has to be a public base: JUCE finds the target under the mouse with a
+    dynamic_cast, and a cast to a private base fails, so a private one is silently never
+    offered the drop. */
 class CueListComponent : public  juce::Component,
+                         public  juce::DragAndDropContainer,
+                         public  juce::DragAndDropTarget,
                          private juce::TableListBoxModel,
-                         private juce::ChangeListener
+                         private juce::ChangeListener,
+                         private juce::Timer
 {
 public:
     CueListComponent (CueList& list, AudioEngine& engine);
     ~CueListComponent() override;
 
     void resized() override;
+    void paintOverChildren (juce::Graphics&) override;
 
     /** Called when the operator picks a different cue to edit. */
     std::function<void (int index)> onSelectionChanged;
@@ -36,6 +43,11 @@ public:
 
     /** Called when the operator clicks a row's delete cross. */
     std::function<void (int cueIndex)> onCueDeleteRequested;
+
+    /** Called when the operator drags cue @p cueIndex to a new place in the list. @p gapIndex
+        names the place as CueList::moveToGap does. Never called for a drop that would leave
+        the cue where it was. */
+    std::function<void (int cueIndex, int gapIndex)> onCueMoveRequested;
 
     void refresh();
 
@@ -51,6 +63,31 @@ private:
     void cellDoubleClicked (int row, int columnId, const juce::MouseEvent&) override;
     void selectedRowsChanged (int lastRowSelected) override;
     void backgroundClicked (const juce::MouseEvent&) override;
+    juce::var getDragSourceDescription (const juce::SparseSet<int>& selectedRows) override;
+
+    //== Reordering by drag ====================================================
+    bool isInterestedInDragSource (const SourceDetails&) override;
+    void itemDragEnter (const SourceDetails&) override;
+    void itemDragMove (const SourceDetails&) override;
+    void itemDragExit (const SourceDetails&) override;
+    void itemDropped (const SourceDetails&) override;
+    void dragOperationEnded (const SourceDetails&) override;
+    void timerCallback() override;
+
+    /** The cue a drag is carrying, or -1 if @p details is not one of ours. */
+    int draggedCueIndex (const SourceDetails& details) const;
+
+    /** The gap (as CueList::moveToGap counts them) nearest @p position, which is in this
+        component's coordinates. A drop among a cue's sub-cues goes below that cue, since
+        nothing can sit between a cue and its own sub-cues. Returns -1 off the table. */
+    int gapIndexAt (juce::Point<int> position) const;
+
+    /** The display row whose top edge marks gap @p gapIndex. */
+    int displayRowForGap (int gapIndex) const;
+
+    /** Recomputes the drop line from dragFromIndex and lastDragPosition. */
+    void updateDropIndicator();
+    void clearDropIndicator();
 
     void changeListenerCallback (juce::ChangeBroadcaster*) override;
 
@@ -111,6 +148,17 @@ private:
     /** Cues the operator has opened by hand. The standby cue opens on its own while it is
         part-way through its lifecycle, so the steps are visible exactly when they matter. */
     std::set<juce::Uuid> manuallyExpanded;
+
+    /** Where a drag in progress would put its cue, or -1 when there is no drag or the drop
+        would change nothing. Drawn as a line across the table. */
+    int dropGapIndex { -1 };
+
+    /** The cue being dragged, or -1 when no drag is over the list. */
+    int dragFromIndex { -1 };
+
+    /** The last place a drag was seen, kept so the timer can scroll a long list while the
+        mouse is held still at its top or bottom edge. */
+    juce::Point<int> lastDragPosition;
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (CueListComponent)
 };

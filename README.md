@@ -214,8 +214,9 @@ control layer working perfectly, and still not something a screenshot should dep
 | `Cmd/Ctrl` + `,` | Audio setup |
 | `Shift` + `Cmd/Ctrl` + `,` | Control setup |
 
-Drag audio files onto the window to add them as cues, or drag a `.cueshow` file onto it to open
-it.
+Drag a cue up or down the list to move it. A line shows where it will land, and its sub-cues go
+with it. Drag audio files onto the window to add them as cues, or drag a `.cueshow` file onto it
+to open it.
 
 ## How playback works
 

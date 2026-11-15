@@ -3,6 +3,13 @@
 namespace cp
 {
 
+namespace
+{
+    /** Starts the description of a drag that carries a cue from this list, so anything else
+        dropped on the list is ignored. */
+    const char* const cueDragPrefix = "simplecue-cue:";
+}
+
 CueListComponent::CueListComponent (CueList& list, AudioEngine& engine)
     : cueList (list), audioEngine (engine)
 {
@@ -44,6 +51,24 @@ CueListComponent::~CueListComponent()
 void CueListComponent::resized()
 {
     table.setBounds (getLocalBounds());
+}
+
+void CueListComponent::paintOverChildren (juce::Graphics& g)
+{
+    if (dropGapIndex < 0)
+        return;
+
+    const auto viewArea = getLocalArea (&table, table.getViewport()->getBounds());
+    const auto rowTop = getLocalArea (&table, table.getRowPosition (displayRowForGap (dropGapIndex),
+                                                                   true)).getY();
+
+    // Held inside the rows, so a drop at the very top or bottom still shows a whole line
+    // rather than one tucked under the header or cut off by the edge.
+    const auto y = juce::jlimit (viewArea.getY() + 3, viewArea.getBottom() - 4, rowTop);
+
+    g.setColour (colours::text);
+    g.fillRect (viewArea.getX(), y - 1, viewArea.getWidth(), 2);
+    g.fillEllipse ((float) viewArea.getX() + 2.0f, (float) y - 3.5f, 7.0f, 7.0f);
 }
 
 void CueListComponent::changeListenerCallback (juce::ChangeBroadcaster*)
@@ -616,5 +641,149 @@ void CueListComponent::selectedRowsChanged (int lastRowSelected)
 }
 
 void CueListComponent::backgroundClicked (const juce::MouseEvent&) {}
+
+//==============================================================================
+juce::var CueListComponent::getDragSourceDescription (const juce::SparseSet<int>& selectedRows)
+{
+    // Only a cue's own row picks it up. A sub-cue belongs to its cue and goes where it goes.
+    if (selectedRows.size() != 1)
+        return {};
+
+    const auto row = selectedRows[0];
+
+    if (! juce::isPositiveAndBelow (row, (int) displayRows.size())
+        || ! displayRows[(size_t) row].isHeader())
+        return {};
+
+    if (const auto* cue = cueList.get (displayRows[(size_t) row].cueIndex))
+        return juce::String (cueDragPrefix) + cue->id.toString();
+
+    return {};
+}
+
+int CueListComponent::draggedCueIndex (const SourceDetails& details) const
+{
+    if (details.sourceComponent.get() != &table)
+        return -1;
+
+    const auto description = details.description.toString();
+
+    if (! description.startsWith (cueDragPrefix))
+        return -1;
+
+    return cueList.indexOfID (juce::Uuid (description.fromFirstOccurrenceOf (cueDragPrefix,
+                                                                             false, false)));
+}
+
+int CueListComponent::gapIndexAt (juce::Point<int> position) const
+{
+    const auto inTable = table.getLocalPoint (this, position);
+    const auto row = table.getInsertionIndexForPosition (inTable.x, inTable.y);
+
+    if (row < 0)
+        return -1;
+
+    if (row >= (int) displayRows.size())
+        return cueList.size();
+
+    const auto& display = displayRows[(size_t) row];
+    return display.isHeader() ? display.cueIndex : display.cueIndex + 1;
+}
+
+int CueListComponent::displayRowForGap (int gapIndex) const
+{
+    for (int row = 0; row < (int) displayRows.size(); ++row)
+        if (displayRows[(size_t) row].isHeader() && displayRows[(size_t) row].cueIndex == gapIndex)
+            return row;
+
+    return (int) displayRows.size();
+}
+
+void CueListComponent::updateDropIndicator()
+{
+    auto gap = dragFromIndex >= 0 ? gapIndexAt (lastDragPosition) : -1;
+
+    // The gaps either side of the cue being carried would leave it where it is, so they get
+    // no line: no line means letting go changes nothing.
+    if (gap == dragFromIndex || gap == dragFromIndex + 1)
+        gap = -1;
+
+    if (gap != dropGapIndex)
+    {
+        dropGapIndex = gap;
+        repaint();
+    }
+}
+
+void CueListComponent::clearDropIndicator()
+{
+    stopTimer();
+    dragFromIndex = -1;
+
+    if (dropGapIndex >= 0)
+    {
+        dropGapIndex = -1;
+        repaint();
+    }
+}
+
+bool CueListComponent::isInterestedInDragSource (const SourceDetails& details)
+{
+    return draggedCueIndex (details) >= 0;
+}
+
+void CueListComponent::itemDragEnter (const SourceDetails& details)
+{
+    itemDragMove (details);
+}
+
+void CueListComponent::itemDragMove (const SourceDetails& details)
+{
+    dragFromIndex = draggedCueIndex (details);
+    lastDragPosition = details.localPosition;
+    updateDropIndicator();
+
+    if (! isTimerRunning())
+        startTimerHz (30);
+}
+
+void CueListComponent::itemDragExit (const SourceDetails&)
+{
+    clearDropIndicator();
+}
+
+void CueListComponent::itemDropped (const SourceDetails& details)
+{
+    const auto from = draggedCueIndex (details);
+    const auto gap = gapIndexAt (details.localPosition);
+
+    clearDropIndicator();
+
+    if (from < 0 || gap < 0 || gap == from || gap == from + 1)
+        return;
+
+    if (onCueMoveRequested != nullptr)
+        onCueMoveRequested (from, gap);
+}
+
+void CueListComponent::dragOperationEnded (const SourceDetails&)
+{
+    // A drag let go outside the list never reaches itemDropped or itemDragExit.
+    clearDropIndicator();
+}
+
+void CueListComponent::timerCallback()
+{
+    // Drag-move callbacks stop the moment the mouse is held still, so this is what keeps a
+    // long list scrolling while a cue is held at its top or bottom edge.
+    auto* viewport = table.getViewport();
+    const auto inViewport = viewport->getLocalPoint (this, lastDragPosition);
+
+    if (viewport->autoScroll (inViewport.x, inViewport.y, 30, 14))
+    {
+        updateDropIndicator();
+        repaint();   // The line follows its row as the rows move under it.
+    }
+}
 
 } // namespace cp

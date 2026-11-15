@@ -16,6 +16,10 @@ cues and press **GO**.
 A **cue** is an audio file with an in point, an out point, a gain and a pre-wait. The cue list
 runs top to bottom, and **GO** fires whatever's on standby.
 
+To change the running order, drag a cue up or down the list. A line shows where it will land,
+and its sub-cues go with it. Or select it and press `Cmd/Ctrl` + `↑` / `↓`. Moving a cue
+doesn't renumber it: **Cue → Renumber all cues** does that when you want it.
+
 Everything else is about how cues start, stop and hand over to each other.
 
 ![The SimpleCue window: GO and the standby cue top left, the cue list in the middle, what is currently sounding on the right, and the waveform with in/out and vamp markers underneath.](images/main-window.png)

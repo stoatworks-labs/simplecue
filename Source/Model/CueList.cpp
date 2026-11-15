@@ -89,6 +89,21 @@ void CueList::move (int fromIndex, int toIndex)
     sendChangeMessage();
 }
 
+int CueList::moveToGap (int fromIndex, int gapIndex)
+{
+    if (! juce::isPositiveAndBelow (fromIndex, size()) || gapIndex < 0 || gapIndex > size())
+        return -1;
+
+    // Lifting the cue out closes up the list, so every gap below it moves up by one.
+    const auto toIndex = gapIndex > fromIndex ? gapIndex - 1 : gapIndex;
+
+    if (toIndex == fromIndex)
+        return -1;
+
+    move (fromIndex, toIndex);
+    return toIndex;
+}
+
 void CueList::replace (int index, Cue cue)
 {
     if (! juce::isPositiveAndBelow (index, size()))

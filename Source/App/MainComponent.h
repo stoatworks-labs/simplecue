@@ -107,6 +107,10 @@ private:
     void deleteSelectedCue();
     void duplicateSelectedCue();
     void moveSelectedCue (int delta);
+
+    /** After a move: selects the cue now at @p index, in the list and the inspector. Does
+        nothing for -1, which is what a move that changed nothing returns. */
+    void selectMovedCue (int index);
     void renumberCues();
     void showAudioSetup();
     void preloadShowAudio();
