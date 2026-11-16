@@ -11,7 +11,7 @@ tell which ones are load-bearing and why.
 ## 1. What this is
 
 A **platform-independent audio cue player** for theatre, live events and installation, built
-in JUCE 8 / C++20 with CMake. Public repo. Released v0.4.1 for macOS universal, Windows
+in JUCE 8 / C++20 with CMake. Public repo. Released v0.5.0 for macOS universal, Windows
 x64/arm64 and Linux x64/arm64.
 
 The domain model in one paragraph: a **cue** is an audio file with in/out points, gain and
@@ -110,7 +110,7 @@ a running app over real sockets; run them by hand after touching OSC or DMX.
 
 ## 7. State of play
 
-404 checks pass, including real-socket end-to-end runs, and CI is green on macOS, Linux and
+419 checks pass, including real-socket end-to-end runs, and CI is green on macOS, Linux and
 Windows.
 
 What that does **not** cover, and should not be claimed: **SimpleCue has never been run on a

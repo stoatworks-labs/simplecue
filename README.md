@@ -8,7 +8,7 @@
 > index, through the real `CueVoice` and checks in and out points, fades, loops, vamps, routing
 > and crossfade timing sample by sample. The control layer's wire formats and mappings are
 > tested the same way, and the OSC and Art-Net paths are also driven end to end over real
-> sockets against a running app (404 checks, all passing). It **hasn't** been run on a live show
+> sockets against a running app (419 checks, all passing). It **hasn't** been run on a live show
 > yet. No MIDI, lighting or streaming hardware has been connected to it, and only the
 > macOS/CoreAudio build has been tried on real audio hardware.
 
@@ -316,6 +316,11 @@ Both fixes come with tests. The OSC ones fail against the old lower-casing, and 
 checks which call does the replacing, since a finished save looks the same either way. The suite
 passes in CI on macOS, Linux and Windows. Windows skips the read-only-folder save checks, because
 it doesn't enforce read-only on a folder.
+
+**v0.5.0:** drag a cue up or down the list to move it. A line shows where it will land, and
+none is drawn when letting go would leave it where it is. A drop among a cue's sub-cues goes
+below that cue, sub-cue rows don't drag, and holding a drag at the top or bottom edge scrolls
+a long list. **Cue → Move cue up/down** (Cmd/Ctrl+↑/↓) still works, one step at a time.
 
 Not yet built:
 
