@@ -322,6 +322,13 @@ none is drawn when letting go would leave it where it is. A drop among a cue's s
 below that cue, sub-cue rows don't drag, and holding a drag at the top or bottom edge scrolls
 a long list. **Cue → Move cue up/down** (Cmd/Ctrl+↑/↓) still works, one step at a time.
 
+**v0.5.1:** the keyboard shortcuts work again once you've clicked a cue. Clicking a cue's row
+gives the cue list the keyboard, and it was taking keys meant for the app: Cmd/Ctrl+↑/↓ only
+moved the highlight instead of the cue, Shift+Cmd/Ctrl+↑/↓ did the same instead of stepping
+the standby marker, and Return (Release vamp), Cmd/Ctrl+Return (Standby the selected cue) and
+Cmd/Ctrl+Backspace (Delete cue) did nothing. The list now keeps only the plain arrow keys,
+Page Up/Down, Home and End.
+
 Not yet built:
 
 - **Phase 3: streaming provider adapters.** OAuth PKCE and transport for the four services
