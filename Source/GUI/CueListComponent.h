@@ -139,9 +139,28 @@ private:
         cues that actually wait rather than on a wall of identical zeroes. */
     void drawTimeCell (juce::Graphics&, juce::Rectangle<int>, double seconds) const;
 
+    /** The list keeps only the keys it navigates with: plain arrows, Page Up/Down, Home and
+        End. JUCE's ListBox matches a key by its code alone, so it would also take Cmd+Up as
+        Up, and it eats Return and Delete for model callbacks this list doesn't use. Those
+        are the app's shortcuts (Move cue, Standby, Release vamp, Delete cue), and once a
+        cue's row has been clicked the list has the keyboard focus, so it sees them first. */
+    struct CueTable : public juce::TableListBox
+    {
+        bool keyPressed (const juce::KeyPress& key) override
+        {
+            if (key.getModifiers().isCommandDown()
+                || key.isKeyCode (juce::KeyPress::returnKey)
+                || key.isKeyCode (juce::KeyPress::deleteKey)
+                || key.isKeyCode (juce::KeyPress::backspaceKey))
+                return false;
+
+            return juce::TableListBox::keyPressed (key);
+        }
+    };
+
     CueList& cueList;
     AudioEngine& audioEngine;
-    juce::TableListBox table;
+    CueTable table;
     std::vector<AudioEngine::ActiveCueInfo> activeSnapshot;
     std::vector<DisplayRow> displayRows;
 
