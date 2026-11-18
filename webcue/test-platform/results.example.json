@@ -1,0 +1,161 @@
+[
+  {
+    "at": "2026-08-29T00:52:08.387Z",
+    "failed": 1,
+    "total": 9,
+    "results": [
+      {
+        "name": "AudioContext running without a gesture",
+        "ok": false,
+        "detail": "state=suspended, rate=48000 — this browser needs a click first, which the app does"
+      },
+      {
+        "name": "wasm fetched",
+        "ok": true,
+        "detail": "72712 bytes"
+      },
+      {
+        "name": "worklet module loaded",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "engine instantiated in worklet",
+        "ok": true,
+        "detail": "2 out, 32 voices, block 128"
+      },
+      {
+        "name": "source accepted",
+        "ok": true,
+        "detail": "144000 frames"
+      },
+      {
+        "name": "AudioContext resumed by a tap",
+        "ok": true,
+        "detail": "state=running"
+      },
+      {
+        "name": "voice actually rendered audio",
+        "ok": true,
+        "detail": "sounded=4096 samples, position=4096"
+      },
+      {
+        "name": "audio thread kept running",
+        "ok": true,
+        "detail": "4096 -> 32768 samples"
+      },
+      {
+        "name": "no engine errors",
+        "ok": true,
+        "detail": ""
+      }
+    ],
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Safari/605.1.15"
+  },
+  {
+    "at": "2026-08-29T00:52:35.376Z",
+    "failed": 1,
+    "total": 9,
+    "results": [
+      {
+        "name": "AudioContext running without a gesture",
+        "ok": false,
+        "detail": "state=suspended, rate=48000 — this browser needs a click first, which the app does"
+      },
+      {
+        "name": "wasm fetched",
+        "ok": true,
+        "detail": "72712 bytes"
+      },
+      {
+        "name": "worklet module loaded",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "engine instantiated in worklet",
+        "ok": true,
+        "detail": "2 out, 32 voices, block 128"
+      },
+      {
+        "name": "source accepted",
+        "ok": true,
+        "detail": "144000 frames"
+      },
+      {
+        "name": "AudioContext resumed by a tap",
+        "ok": true,
+        "detail": "state=running"
+      },
+      {
+        "name": "voice actually rendered audio",
+        "ok": true,
+        "detail": "sounded=4096 samples, position=4096"
+      },
+      {
+        "name": "audio thread kept running",
+        "ok": true,
+        "detail": "4096 -> 32768 samples"
+      },
+      {
+        "name": "no engine errors",
+        "ok": true,
+        "detail": ""
+      }
+    ],
+    "ua": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.4 Safari/605.1.15"
+  },
+  {
+    "at": "2026-08-29T00:57:25.383Z",
+    "failed": 1,
+    "total": 9,
+    "results": [
+      {
+        "name": "AudioContext running without a gesture",
+        "ok": false,
+        "detail": "state=suspended, rate=48000 — this browser needs a click first, which the app does"
+      },
+      {
+        "name": "wasm fetched",
+        "ok": true,
+        "detail": "72712 bytes"
+      },
+      {
+        "name": "worklet module loaded",
+        "ok": true,
+        "detail": ""
+      },
+      {
+        "name": "engine instantiated in worklet",
+        "ok": true,
+        "detail": "2 out, 32 voices, block 128"
+      },
+      {
+        "name": "source accepted",
+        "ok": true,
+        "detail": "144000 frames"
+      },
+      {
+        "name": "AudioContext resumed by a tap",
+        "ok": true,
+        "detail": "state=running"
+      },
+      {
+        "name": "voice actually rendered audio",
+        "ok": true,
+        "detail": "sounded=12288 samples, position=12288"
+      },
+      {
+        "name": "audio thread kept running",
+        "ok": true,
+        "detail": "12288 -> 43008 samples"
+      },
+      {
+        "name": "no engine errors",
+        "ok": true,
+        "detail": ""
+      }
+    ],
+    "ua": "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36"
+  }
+]

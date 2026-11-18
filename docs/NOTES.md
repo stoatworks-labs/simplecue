@@ -61,3 +61,54 @@ Design decisions worth keeping: audio is resampled to the device rate **at load 
 loop/vamp maths is exact integer arithmetic on the audio thread; links are pre-scheduled in
 samples (not by a UI timer) so crossfades and auto-follows are sample-accurate.
 See the repo's CLAUDE.md for the audio-thread rules. Related: [juce gotchas](https://github.com/stoatworks-labs/fleet-notes/blob/main/notes/reference_juce_gotchas.md).
+
+---
+
+## webcue — the browser build (2026-08-29)
+
+Lives in `webcue/` in this repo, deployed at **webcue.stoatworks-labs.com**. It is
+in the repo rather than its own because it *compiles from `Source/`*: a separate
+repo would need a submodule or a copy, and a copy diverges on day one.
+
+**The engine is not a port.** `Source/Audio/CueVoice.cpp` compiles to WebAssembly
+unmodified and runs in an `AudioWorkletProcessor`. It touches six JUCE names
+(`jmin`, `jmax`, `jlimit`, `isPositiveAndBelow`, `int64`, `AudioBuffer`, plus
+`HeapBlock` in the header) which a ~200-line shim supplies. `build.sh verify`
+compares native and wasm sample by sample; only `equalPower` differs, because it
+is the one curve calling `std::sin` and the libms disagree by ≤2 ulp. Everything
+above the audio thread — link scheduling, standby, the codec — is rewritten in
+TypeScript and carries the tests.
+
+**Worth lifting upstream:** `webcue/shim/Model/Cue.h` is 40 lines and is all that
+`VoiceSpec` takes from the 300-line `Cue.h`. That wants to become
+`Source/Model/CueTypes.h`, included by both — the audio-thread header would stop
+pulling in file paths, `juce::var` persistence and streaming settings it has no
+business seeing. Not done yet.
+
+**docs/API.md is wrong about one key.** It documents the link's kind as `type`;
+the code writes and reads `mode`, and `linkModeFromString` falls back to `none`,
+so anything generated from the published docs decodes to a link that silently
+never fires. A test pins the real behaviour. Fix pending.
+
+**Traps that cost time**, all now in `webcue/AGENTS.md`: `height: 100vh` is wrong
+on iOS Safari (use `100dvh`, or the transport scrolls off during a show);
+`AudioContext.resume()` never settles on WebKit without a gesture and hangs an
+unguarded `await`; `-ffp-contract=off` is required or the parity check reports
+the compiler's FMA as a porting difference; clicking a disabled button is silent
+in both WebDriver and CDP; the context sample rate is not always 48 kHz.
+
+**Verification reached further than the desktop app's.** Engine and app run on
+macOS, Linux, Windows, iPadOS and Android across all four engines
+(`webcue/test-platform/`), and the `.cueshow` round trip is proven **both ways**
+against the real desktop app — a browser-written show opens in SimpleCue with
+free-text cue numbers, links, vamps and relative paths intact, and SimpleCue's
+own save of it round-trips through the codec losslessly. That fixture is
+committed. Still true, and unchanged from the desktop app: never run on a live
+show, and only macOS has been listened to by a human.
+
+**Deliberately absent, and not coming:** OSC, Art-Net and sACN are UDP and a
+browser cannot open a socket. Web MIDI is the obvious next phase (Chrome and
+Edge only; Safari has none). Multichannel is stereo in practice, so a show
+routed beyond the browser's outputs is offered a fold on load rather than
+silently folded — folding without asking would make webcue quietly disagree with
+the desktop about what the show sounds like.
