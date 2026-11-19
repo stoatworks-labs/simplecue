@@ -134,6 +134,24 @@ private:
     juce::StretchableLayoutResizerBar verticalResizer { &verticalLayout, 1, false };
 
     juce::ApplicationCommandManager commandManager;
+
+    /** What the menus' greyed-out items and changing titles are worked out from. The macOS
+        menu bar does not ask again each time a menu opens: JUCE rebuilds it once just after
+        launch, and from then on a menu keeps the enabled state it was built with, so Move cue
+        up stayed greyed out with a cue selected. When any of this changes the command manager
+        is told, and the menu bar it watches rebuilds itself. */
+    struct CommandState
+    {
+        bool hasSelection = false;
+        bool vamping = false;
+        bool paused = false;
+
+        bool operator== (const CommandState&) const = default;
+    };
+
+    CommandState lastCommandState;
+    void refreshCommandStatus();
+
     std::unique_ptr<juce::FileChooser> fileChooser;
     std::unique_ptr<AudioSetupWindow> audioSetupWindow;
     std::unique_ptr<ControlSetupWindow> controlSetupWindow;

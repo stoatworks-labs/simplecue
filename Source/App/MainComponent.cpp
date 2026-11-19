@@ -133,6 +133,16 @@ MainComponent::MainComponent (juce::ApplicationProperties& props)
     addKeyListener (commandManager.getKeyMappings());
     setWantsKeyboardFocus (true);
 
+    // The menu bar rebuilds itself whenever the command manager says a command's state has
+    // changed; refreshCommandStatus() is what says so. See CommandState.
+    setApplicationCommandManagerToWatch (&commandManager);
+
+    // Every command lives here, so name this as the target rather than let JUCE find one
+    // through the keyboard focus. That search comes up empty whenever the app is in the
+    // background or another of its windows is in front, and a menu built then had every
+    // item greyed out.
+    commandManager.setFirstCommandTarget (this);
+
     show.addChangeListener (this);
     sampleCache.addChangeListener (this);
 
@@ -167,6 +177,12 @@ MainComponent::~MainComponent()
     sampleCache.removeChangeListener (this);
     show.removeChangeListener (this);
     removeKeyListener (commandManager.getKeyMappings());
+
+    // MenuBarModel's own destructor would stop watching too, but it runs after our members
+    // are gone, by which time commandManager no longer exists.
+    setApplicationCommandManagerToWatch (nullptr);
+    commandManager.setFirstCommandTarget (nullptr);
+
     audioSetupWindow = nullptr;
     audioEngine.shutdown();
 }
@@ -239,6 +255,9 @@ void MainComponent::timerCallback()
 
         inspector.setPlayheadTime (playhead);
     }
+
+    // Vamping and pausing change with the audio, not with the show, so they are caught here.
+    refreshCommandStatus();
 }
 
 void MainComponent::changeListenerCallback (juce::ChangeBroadcaster* source)
@@ -247,6 +266,21 @@ void MainComponent::changeListenerCallback (juce::ChangeBroadcaster* source)
         updateWindowTitle();
 
     cueListComponent.refresh();
+    refreshCommandStatus();
+}
+
+void MainComponent::refreshCommandStatus()
+{
+    const CommandState state { show.getCueList().getSelectedIndex() >= 0,
+                               audioEngine.isAnythingVamping(),
+                               audioEngine.isPaused() };
+
+    // Only on a change: each call rebuilds the whole menu bar.
+    if (state == lastCommandState)
+        return;
+
+    lastCommandState = state;
+    commandManager.commandStatusChanged();
 }
 
 void MainComponent::updateWindowTitle()
@@ -1289,7 +1323,10 @@ void MainComponent::getCommandInfo (juce::CommandID commandID, juce::Application
             break;
 
         case CommandIDs::go:
-            info.setInfo ("GO", "Fire the standby cue", "Transport", 0);
+            // The GO button invokes this directly, and a watched command manager otherwise
+            // flashes the Transport menu's title on every press that is not a keystroke.
+            info.setInfo ("GO", "Fire the standby cue", "Transport",
+                          juce::ApplicationCommandInfo::dontTriggerVisualFeedback);
             info.addDefaultKeypress (KeyPress::spaceKey, 0);
             break;
 
