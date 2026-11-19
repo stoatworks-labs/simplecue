@@ -329,6 +329,13 @@ the standby marker, and Return (Release vamp), Cmd/Ctrl+Return (Standby the sele
 Cmd/Ctrl+Backspace (Delete cue) did nothing. The list now keeps only the plain arrow keys,
 Page Up/Down, Home and End.
 
+**v0.5.2:** on a Mac, the menus keep up with what you're doing. The macOS menu bar was built
+once just after launch and never asked again, so the Cue menu kept the state it had at
+start-up, with nothing selected: Duplicate, Delete and Move cue up/down stayed greyed out
+even with a cue selected, although their shortcuts worked. They now follow the selection, and
+**Transport → Pause** reads Resume while paused. Windows and Linux draw their own menu bar on
+every click and were never affected.
+
 Not yet built:
 
 - **Phase 3: streaming provider adapters.** OAuth PKCE and transport for the four services
