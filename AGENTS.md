@@ -11,7 +11,7 @@ tell which ones are load-bearing and why.
 ## 1. What this is
 
 A **platform-independent audio cue player** for theatre, live events and installation, built
-in JUCE 8 / C++20 with CMake. Public repo. Released v0.5.2 for macOS universal, Windows
+in JUCE 8 / C++20 with CMake. Public repo. Released v0.5.3 for macOS universal, Windows
 x64/arm64 and Linux x64/arm64.
 
 The domain model in one paragraph: a **cue** is an audio file with in/out points, gain and
@@ -55,7 +55,7 @@ Source/Control   ControlHub (owns transports, schedules outgoing, publishes
                  DmxProtocol and the actionFor* mappings are pure functions.
 Source/GUI       UI components.
 Source/App       Command/menu target.
-Tests/           EngineTests.cpp, ControlTests.cpp, e2e/ (real-socket scripts).
+Tests/           EngineTests.cpp, ControlTests.cpp, CueListTests.cpp, e2e/ (real-socket scripts).
 ```
 
 The internal C++ namespace is still `cp`, predating the rename from cue-player. **Leave it
@@ -99,6 +99,13 @@ rather than reusing the parser's own layout constants — otherwise a bug in the
 cancels out against the matching bug in the test. `Tests/e2e/` holds two scripts that drive
 a running app over real sockets; run them by hand after touching OSC or DMX.
 
+For how the cue list looks, extend `Tests/CueListTests.cpp`. It paints the real
+`CueListComponent` into an image, with no window, and reads the rows back as pixels, so
+"the selected cue is marked" is a contrast ratio rather than a judgement by eye. It sets
+the selection the way the app does: through the show's `CueList` (what opening a show does)
+or the inner table's `selectRow` (what a click does). Clicking SimpleCue from outside does
+not work while it is in the background, so this is also the only way to check a click.
+
 ## 6. Conventions
 
 - **No non-ASCII characters in string literals.** JUCE's `String(const char*)` asserts on
@@ -110,7 +117,7 @@ a running app over real sockets; run them by hand after touching OSC or DMX.
 
 ## 7. State of play
 
-419 checks pass, including real-socket end-to-end runs, and CI is green on macOS, Linux and
+432 checks pass, including real-socket end-to-end runs, and CI is green on macOS, Linux and
 Windows.
 
 What that does **not** cover, and should not be claimed: **SimpleCue has never been run on a

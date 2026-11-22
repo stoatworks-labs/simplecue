@@ -8,7 +8,7 @@
 > index, through the real `CueVoice` and checks in and out points, fades, loops, vamps, routing
 > and crossfade timing sample by sample. The control layer's wire formats and mappings are
 > tested the same way, and the OSC and Art-Net paths are also driven end to end over real
-> sockets against a running app (419 checks, all passing). It **hasn't** been run on a live show
+> sockets against a running app (432 checks, all passing). It **hasn't** been run on a live show
 > yet. No MIDI, lighting or streaming hardware has been connected to it, and only the
 > macOS/CoreAudio build has been tried on real audio hardware.
 
@@ -335,6 +335,13 @@ start-up, with nothing selected: Duplicate, Delete and Move cue up/down stayed g
 even with a cue selected, although their shortcuts worked. They now follow the selection, and
 **Transport → Pause** reads Resume while paused. Windows and Linux draw their own menu bar on
 every click and were never affected.
+
+**v0.5.3:** you can always see which cue you're editing. The cue list's highlight was often
+missing, after opening a show or after clicking one of a cue's sub-cues. It could also sit on
+the wrong cue once a GO opened or closed the standby cue's steps, and it was faint when it did
+show. It now follows the cue the inspector is showing: the whole cue, sub-cues included, is
+marked in blue with an outline, well apart from the purple standby marker. A new test paints
+the real cue list and reads the rows back, and fails against the old code.
 
 Not yet built:
 

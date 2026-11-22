@@ -71,3 +71,8 @@ For the control layer, extend `Tests/ControlTests.cpp`. Build packets byte by by
 than reusing the parser's own layout, so a bug in the parser cannot cancel out against a
 matching bug in the test. `Tests/e2e/` holds two scripts that drive a running app over real
 sockets; run them by hand after changing OSC or DMX.
+
+For how the cue list looks, extend `Tests/CueListTests.cpp`: it paints the real
+`CueListComponent` into an image and reads the rows back as pixels. The cue list's highlight
+follows the show's selected cue (`CueList::getSelectedIndex`), never the table's own row
+number, which drifts whenever the standby cue's steps open or close.

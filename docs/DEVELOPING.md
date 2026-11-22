@@ -36,7 +36,7 @@ Source/Control   ControlHub (owns transports, schedules outgoing, publishes
                  DmxProtocol and the actionFor* mappings are PURE FUNCTIONS.
 Source/GUI       UI
 Source/App       Command/menu target
-Tests/           EngineTests.cpp, ControlTests.cpp, e2e/
+Tests/           EngineTests.cpp, ControlTests.cpp, CueListTests.cpp, e2e/
 ```
 
 The internal namespace is still `cp`, predating the rename from cue-player. **Leave it** —
