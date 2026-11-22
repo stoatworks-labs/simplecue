@@ -971,6 +971,9 @@ void testCueGeometry()
 /** Defined in ControlTests.cpp. */
 void runControlTests();
 
+/** Defined in CueListTests.cpp. */
+void runCueListTests();
+
 int main()
 {
     // ChangeBroadcaster posts through the message queue, so the model classes need a
@@ -1016,6 +1019,7 @@ int main()
     directory.deleteRecursively();
 
     runControlTests();
+    runCueListTests();
 
     std::printf ("\n%d checks, %d failures\n\n", cptest::checks, cptest::failures);
     return cptest::failures == 0 ? 0 : 1;

@@ -128,6 +128,13 @@ private:
     };
 
     void rebuildRows();
+
+    /** Puts the table's own selected row back on the show's selected cue, so the arrow keys
+        move on from the cue being edited. The table only knows row numbers, and a refresh
+        can leave its row on another cue: opening a show selects cue 1 without touching the
+        table, and the standby cue's steps opening or closing shift every row below them. */
+    void syncTableSelection();
+
     bool isExpanded (const Cue& cue) const;
     void toggleExpansion (const Cue& cue);
     juce::Rectangle<int> getTwistyBounds (int width, int height) const;

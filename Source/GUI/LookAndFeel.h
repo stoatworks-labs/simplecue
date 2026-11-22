@@ -25,6 +25,11 @@ namespace colours
     const juce::Colour vamp         { 0xfff1c40f };
     const juce::Colour loop         { 0xff5dade2 };
     const juce::Colour standby      { 0xff9b59b6 };
+
+    /** The cue being edited. Blue, well away from the standby purple: selection is what the
+        inspector shows, standby is what GO fires, and the two must never look alike. */
+    const juce::Colour selection    { 0xff3a7bd5 };
+
     const juce::Colour preWait      { 0xff7f8c8d };
     const juce::Colour meterLow     { 0xff2ecc71 };
     const juce::Colour meterHigh    { 0xffe67e22 };

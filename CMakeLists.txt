@@ -223,6 +223,7 @@ target_sources(SimpleCueTests
     PRIVATE
         Tests/EngineTests.cpp
         Tests/ControlTests.cpp
+        Tests/CueListTests.cpp
         Source/Model/Cue.cpp
         Source/Model/CueList.cpp
         Source/Model/Show.cpp
@@ -235,8 +236,11 @@ target_sources(SimpleCueTests
         Source/Control/DmxControl.cpp
         Source/Control/MidiControl.cpp
         Source/Control/OscControl.cpp
+        Source/Audio/AudioEngine.cpp
         Source/Audio/CueVoice.cpp
+        Source/Audio/SampleCache.cpp
         Source/Audio/SampleSource.cpp
+        Source/GUI/CueListComponent.cpp
         Source/GUI/LookAndFeel.cpp)
 
 target_include_directories(SimpleCueTests PRIVATE Source Tests)

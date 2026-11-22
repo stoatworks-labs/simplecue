@@ -99,6 +99,7 @@ void CueListComponent::toggleExpansion (const Cue& cue)
 
     rebuildRows();
     table.updateContent();
+    syncTableSelection();
     table.repaint();
 }
 
@@ -129,7 +130,32 @@ void CueListComponent::refresh()
     rebuildRows();
 
     table.updateContent();
+    syncTableSelection();
     table.repaint();
+}
+
+void CueListComponent::syncTableSelection()
+{
+    const auto selected = cueList.getSelectedIndex();
+    const auto current = table.getSelectedRow();
+
+    // Already on the selected cue, perhaps on one of its steps: leave it where it was put.
+    if (juce::isPositiveAndBelow (current, (int) displayRows.size())
+        && displayRows[(size_t) current].cueIndex == selected)
+        return;
+
+    for (int row = 0; row < (int) displayRows.size(); ++row)
+    {
+        if (displayRows[(size_t) row].cueIndex == selected && displayRows[(size_t) row].isHeader())
+        {
+            // Without scrolling: this runs on every refresh, and the operator may have
+            // scrolled away from the selection on purpose.
+            table.selectRow (row, true, true);
+            return;
+        }
+    }
+
+    table.deselectAllRows();
 }
 
 void CueListComponent::selectRow (int index)
@@ -267,7 +293,7 @@ CueListComponent::Status CueListComponent::statusFor (const Cue& cue) const
     return {};
 }
 
-void CueListComponent::paintRowBackground (juce::Graphics& g, int row, int width, int height, bool rowIsSelected)
+void CueListComponent::paintRowBackground (juce::Graphics& g, int row, int width, int height, bool)
 {
     if (! juce::isPositiveAndBelow (row, (int) displayRows.size()))
         return;
@@ -281,8 +307,35 @@ void CueListComponent::paintRowBackground (juce::Graphics& g, int row, int width
     else
         g.fillAll (colours::background.brighter (0.02f));
 
-    if (rowIsSelected && display.isHeader())
-        g.fillAll (colours::panelLight);
+    // The highlight follows the show's selected cue, the one the inspector shows, rather
+    // than the table's selected row. The two drift apart: opening a show selects cue 1
+    // without touching the table, clicking a sub-cue selects that step's row, and a row
+    // number stops meaning the same cue once the standby cue's steps open or close above
+    // it. The whole block is marked - strongly on the header, lighter on its steps - and
+    // outlined, so it can be found from across a dark room.
+    const auto isSelectedCue = display.cueIndex == cueList.getSelectedIndex();
+
+    if (isSelectedCue)
+        g.fillAll (colours::selection.withAlpha (display.isHeader() ? 0.45f : 0.25f));
+
+    g.setColour (colours::outline.withAlpha (display.isHeader() ? 0.5f : 0.2f));
+    g.drawHorizontalLine (height - 1, 0.0f, (float) width);
+
+    if (isSelectedCue)
+    {
+        const auto isLastOfBlock = row + 1 >= (int) displayRows.size()
+                                || displayRows[(size_t) row + 1].cueIndex != display.cueIndex;
+
+        g.setColour (colours::selection);
+        g.fillRect (0, 0, 1, height);
+        g.fillRect (width - 1, 0, 1, height);
+
+        if (display.isHeader())
+            g.fillRect (0, 0, width, 1);
+
+        if (isLastOfBlock)
+            g.fillRect (0, height - 1, width, 1);
+    }
 
     // The standby marker goes on the exact row GO will act on: the cue header when the
     // lifecycle is collapsed or at its start, otherwise the step itself.
@@ -299,14 +352,12 @@ void CueListComponent::paintRowBackground (juce::Graphics& g, int row, int width
     const auto isStandbyRow = display.cueIndex == standbyCue
                            && (display.stepIndex == standbyStep || collapsedOntoHeader);
 
+    // Drawn last, over the selection's outline: standby is what GO fires, so it wins.
     if (isStandbyRow)
     {
         g.setColour (colours::standby);
         g.fillRect (0, 0, 4, height);
     }
-
-    g.setColour (colours::outline.withAlpha (display.isHeader() ? 0.5f : 0.2f));
-    g.drawHorizontalLine (height - 1, 0.0f, (float) width);
 }
 
 void CueListComponent::paintCell (juce::Graphics& g, int row, int columnId, int width, int height, bool)
